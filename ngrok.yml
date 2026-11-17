@@ -1,0 +1,6 @@
+version: "2"
+web_addr: 0.0.0.0:4040
+web_allow_hosts:
+  - ngrok
+  - localhost
+  - 127.0.0.1

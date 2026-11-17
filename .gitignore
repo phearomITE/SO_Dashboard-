@@ -1,0 +1,8 @@
+.env
+.venv/
+logs/
+__pycache__/
+.pytest_cache/
+*.db
+data/gp_reporting/
+data/report_images/

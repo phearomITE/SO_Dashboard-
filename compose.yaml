@@ -1,0 +1,110 @@
+name: so-alert-local
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-SA_Alert}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5435}:5432"
+    volumes:
+      - so_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  so-bot:
+    build: .
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DATABASE_URL: ""
+      TESSERACT_CMD: tesseract
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+
+  dashboard:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DATABASE_URL: ""
+      REDIS_URL: redis://redis:6379/0
+      DASHBOARD_ADMIN_TOKEN: ${DASHBOARD_ADMIN_TOKEN:?Set a random 32+ character DASHBOARD_ADMIN_TOKEN in .env}
+      DASHBOARD_ADMIN_NAME: ${DASHBOARD_ADMIN_NAME:-SO Operations Admin}
+      DASHBOARD_ADMIN_ID: ${DASHBOARD_ADMIN_ID:-0}
+    command: ["uvicorn", "app.dashboard:app", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "127.0.0.1:${DASHBOARD_PORT:-8081}:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles: ["public"]
+    restart: unless-stopped
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:?Set NGROK_AUTHTOKEN in .env}
+    command: ["http", "dashboard:8001", "--log", "stdout", "--config", "/etc/ngrok.yml"]
+    volumes:
+      - ./ngrok.yml:/etc/ngrok.yml:ro
+    ports:
+      - "127.0.0.1:${NGROK_INSPECTOR_PORT:-4040}:4040"
+    depends_on:
+      dashboard:
+        condition: service_healthy
+
+volumes:
+  so_postgres_data:

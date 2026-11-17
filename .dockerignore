@@ -1,0 +1,13 @@
+.env
+.venv
+logs
+__pycache__
+tests
+.pytest_cache
+**/node_modules
+**/dist
+.git
+data/report_images/*
+!data/report_images/.gitkeep
+data/gp_reporting/
+

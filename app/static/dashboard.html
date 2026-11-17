@@ -1,0 +1,421 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sales Live Check-In Tracking</title><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"><link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>if(new URLSearchParams(location.search).get("embedded")==="1")document.documentElement.classList.add("embedded");</script><style>
+:root{--blue:#0867e8;--ink:#092758;--muted:#60748f;--line:#dce7f3;--bg:#f5f9fd;--orange:#ff8400;--green:#12a934}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px Inter,"Noto Sans Khmer","Khmer OS System","Segoe UI",Arial,sans-serif}.top{height:62px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:8px 25px;justify-content:space-between}.brand{display:flex;align-items:center;gap:13px}.logo{font-weight:900;font-style:italic;font-size:30px;color:#e31937;border-right:1px solid #9eb1c9;padding-right:14px}.company{font-size:10px;font-weight:800;color:#6c7480;line-height:1}.title{font-size:24px;font-weight:800;color:#0758c9}.live{font-weight:800;color:#0b9c28;margin-right:18px}.live i{display:inline-block;width:10px;height:10px;background:#0cad32;border-radius:50%;margin-right:7px;box-shadow:0 0 8px #41d961}.switch{display:inline-flex;align-items:center;gap:8px;font-weight:700;margin-left:20px}.switch b{background:#0874ed;color:#fff;border-radius:15px;padding:5px 9px}.filters{margin:0 15px 10px;background:#fff;border:1px solid var(--line);border-radius:0 0 12px 12px;padding:9px 12px;display:grid;grid-template-columns:repeat(8,minmax(105px,1fr));gap:10px;box-shadow:0 3px 12px #23476a14}.filter label{display:block;font-size:10px;text-transform:uppercase;color:#617690;font-weight:700;margin-bottom:4px}.filter select,.filter input{width:100%;height:34px;border:1px solid #cfddeb;border-radius:7px;background:#fff;color:#173961;padding:5px 9px}.kpis{display:grid;grid-template-columns:repeat(6,minmax(135px,1fr)) minmax(340px,2fr);gap:10px;margin:0 25px 10px}.card{background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 3px 11px #214c7612}.kpi{height:89px;padding:12px;display:flex;align-items:center;gap:13px}.ico{height:52px;width:52px;border-radius:9px;background:linear-gradient(145deg,#0a6bf2,#18a2f8);color:#fff;display:grid;place-items:center;font-size:25px;font-weight:900}.ico.orange{background:linear-gradient(145deg,#ff7200,#ffad00)}.kpi .label{font-size:14px;font-weight:750;color:#0861dd}.kpi .value{font-size:26px;font-weight:800;margin-top:3px}.coverage{display:grid;grid-template-columns:64px repeat(3,1fr);align-items:center;text-align:center}.coverage .metric{border-left:1px solid #a8b8ca}.coverage .metric b{font-size:22px;display:block}.coverage .metric span{font-size:11px}.main{margin:0 25px;display:grid;grid-template-columns:minmax(0,2.15fr) minmax(410px,1fr);gap:10px;height:calc(100vh - 252px);min-height:520px}.mapwrap{position:relative;border-radius:10px;overflow:hidden;border:1px solid #b9cfdf}#map{height:100%;background:#cbe1ea}.side{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1.08fr;gap:10px;min-height:0}.panel{padding:10px 12px;overflow:auto}.panel h3{margin:0 0 10px;color:#075ad1;font-size:16px}.journey-panel{grid-column:1/3}.barrow{display:grid;grid-template-columns:95px 1fr 32px;gap:7px;align-items:center;margin:7px 0}.barrow>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:right;color:#506a89}.bar{height:18px;background:#edf4fa}.bar i{display:block;height:100%;background:linear-gradient(90deg,#0a7ff2,#159ef6)}.legend{position:absolute;z-index:500;top:12px;left:12px;background:#fffc;border:1px solid #bfd0df;border-radius:7px;padding:8px 12px;color:#173c65;line-height:27px;box-shadow:0 2px 8px #0002}.legend i{display:inline-block;width:13px;height:13px;border-radius:50%;margin-right:8px;vertical-align:-2px}.legend .route{height:4px;border-radius:3px;background:#19cbe8;width:20px}.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#fff;color:#12375e}.leaflet-popup-content{min-width:255px}.popup h3{color:#0867e8;font-size:17px;margin:0 0 7px;border-bottom:1px solid #dbe6ef;padding-bottom:5px}.popup .grid{display:grid;grid-template-columns:92px 1fr;gap:5px}.popup a{color:#0879ed;font-weight:700}.popup .grid b{font-weight:650}.pin{width:28px;height:28px;border-radius:50%;color:#fff;border:3px solid #fff;text-align:center;line-height:22px;font-weight:800;box-shadow:0 1px 5px #003a6b}.dealer-marker{width:34px;height:34px;border:3px solid #fff;border-radius:8px;background:#fff;color:#069535;font-size:20px;font-weight:900;display:grid;place-items:center;box-shadow:0 2px 7px #082b55}.current{box-shadow:0 0 0 6px #20d74f77,0 0 0 12px #20d74f33;animation:pulse 1.6s infinite}@keyframes pulse{50%{box-shadow:0 0 0 13px #20d74f00}}table{width:100%;border-collapse:collapse}th,td{padding:7px;border-bottom:1px solid #e4edf5;text-align:left}th{color:#375a7f;font-size:11px}.dot{display:inline-grid;place-items:center;width:23px;height:23px;border-radius:50%;color:#fff;background:#168bf4;font-weight:800}.empty{color:#7890a8;padding:13px 3px}.foot{height:35px;margin-top:9px;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;gap:30px;padding:0 28px;color:#54708d}.foot b{color:#0b9d2e}.foot .warn{color:#e88700}.foot .bad{color:#d93434}@media(max-width:1200px){.filters{grid-template-columns:repeat(4,1fr)}.main{height:auto;grid-template-columns:1fr}.mapwrap{height:650px}.side{height:620px}.kpis{grid-template-columns:repeat(3,1fr)}.coverage{grid-column:span 2}}@media(max-width:700px){.company,.switch{display:none}.title{font-size:18px}.filters{grid-template-columns:repeat(2,1fr)}.kpis{grid-template-columns:1fr}.coverage{grid-column:auto}.side{grid-template-columns:1fr;height:auto}.journey-panel{grid-column:auto}.panel{min-height:250px}}
+.brand-logo{display:block;width:84px!important;height:49px!important;max-width:84px!important;max-height:49px!important;object-fit:contain;border-right:1px solid #9eb1c9;padding-right:12px}.coverage .metric b{white-space:nowrap}.coverage .actual{color:#0874ed}.coverage .slash{font-size:15px;color:#7d91a9;margin:0 2px}.coverage .hint{display:block;font-size:8px;color:#7d91a9;margin-top:2px}.dealer-marker{display:block!important;width:34px!important;height:34px!important;min-width:34px!important;max-width:34px!important;min-height:34px!important;max-height:34px!important;border:2px solid #fff;border-radius:5px;background-color:#fff;background-image:url('/static/chip_mong_foodbev.jpg');background-repeat:no-repeat;background-position:center;background-size:30px 30px;box-shadow:0 2px 7px #082b55;overflow:hidden}.pin{display:grid;place-items:center;line-height:1}.pin svg{width:17px;height:17px;fill:#fff}.panel>div{min-height:0}.marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:#0b75e755}.marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:#0874ed;color:#fff}.journey-panel tbody{overflow:auto}.report-photo{position:relative;float:right;width:92px;height:72px;margin:0 0 8px 10px;border:1px solid #c9d7e5;border-radius:7px;overflow:hidden;background:#eef4f8}.report-photo img{display:block;width:100%!important;height:100%!important;max-width:100%!important;max-height:100%!important;object-fit:cover}.photo-fallback{display:none;position:absolute;inset:0;place-items:center;text-align:center;background:#edf5fc;color:#0874ed;font-size:12px;font-weight:800;line-height:1.4}
+html.embedded,html.embedded body{height:100%;overflow:hidden}html.embedded body{background:transparent}html.embedded .top,html.embedded .foot{display:none!important}html.embedded .filters{margin:0 0 10px;border-radius:14px}html.embedded .kpis{margin:0 0 10px}html.embedded .main{margin:0;height:calc(100vh - 238px);min-height:520px}.employee-profile{display:flex;align-items:center;gap:12px;margin:0 0 10px;padding:10px 11px;border:1px solid #e2ebf3;border-radius:10px;background:linear-gradient(120deg,#f8fbff,#fff)}.profile-avatar{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border-radius:50%;background:linear-gradient(145deg,#0874ed,#13b694);color:white;font-size:16px;font-weight:850}.profile-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%}.profile-copy{min-width:0;flex:1}.profile-copy b,.profile-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.profile-copy small{margin-top:4px;color:#647992}.profile-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}.profile-tags span{border-radius:999px;background:#eaf3ff;color:#1767c9;padding:3px 7px;font-size:10px;font-weight:750}.profile-stats{display:flex;flex-wrap:wrap;gap:10px;margin-top:7px;color:#667b93;font-size:10px}.profile-stats b{color:#173b62;font-size:11px}.profile-link{color:#0879ed;font-size:11px;font-weight:750;text-decoration:none;white-space:nowrap}.employee-profile.empty-profile{color:#71839b;font-size:12px;min-height:64px}@media(max-width:1200px){html.embedded body{height:auto;overflow:auto}html.embedded .main{height:auto}}
+
+/* Live Map: premium, uncluttered white dashboard */
+html.embedded .filters{grid-template-columns:repeat(8,minmax(0,1fr));gap:12px;margin:0 0 14px;padding:15px 16px;border:1px solid #e4ebf4;border-radius:16px;box-shadow:0 8px 24px rgba(22,48,82,.055)}
+html.embedded .filter label{font-size:11px;text-transform:none;letter-spacing:.01em;color:#667992}
+html.embedded .filter select,html.embedded .filter input{height:42px;border:1px solid #dde6f1;border-radius:10px;padding:0 11px;transition:border-color .16s,box-shadow .16s}
+html.embedded .filter select:focus,html.embedded .filter input:focus{outline:0;border-color:#81b5f5;box-shadow:0 0 0 3px #d9eaff}
+html.embedded .employee-filter{position:relative;z-index:5}
+.employee-suggestions{position:absolute;z-index:1500;top:calc(100% + 7px);left:0;right:0;max-height:280px;overflow:auto;padding:6px;border:1px solid #e1e8f1;border-radius:12px;background:#fff;box-shadow:0 14px 36px rgba(16,38,67,.16)}
+.employee-suggestions[hidden]{display:none}
+.employee-suggestion{display:grid;width:100%;grid-template-columns:1fr auto;gap:2px 12px;padding:9px 10px;border:0;border-radius:8px;background:#fff;color:#163455;text-align:left;cursor:pointer}
+.employee-suggestion:hover,.employee-suggestion:focus{outline:0;background:#f2f7fd}
+.employee-suggestion b{font-size:12px}.employee-suggestion span{grid-column:1;color:#536b86;font-size:11px}.employee-suggestion small{grid-column:2;grid-row:1/3;align-self:center;color:#74869b;font-size:10px}
+html.embedded .kpis{grid-template-columns:repeat(6,minmax(0,1fr)) minmax(360px,2fr);gap:12px;margin:0 0 14px}
+html.embedded .card{border:1px solid #e5ebf3;border-radius:15px;box-shadow:0 6px 20px rgba(22,48,82,.05);transition:transform .18s ease,box-shadow .18s ease;animation:liveCardIn .32s ease both}
+html.embedded .card:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(22,48,82,.09)}
+@keyframes liveCardIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.kpi .ico svg{display:block;width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}html.embedded .kpi{height:88px;padding:13px;gap:11px}.kpi .ico{width:40px;height:40px;flex:0 0 40px;border-radius:12px;background:#eaf3ff;color:#1767c9;font-size:19px;box-shadow:none}.kpi .ico.orange{background:#fff2e4;color:#ce720e}.kpi .label{font-size:11px;color:#687d96;line-height:1.2}.kpi .value{font-size:24px;color:#102d4c;line-height:1.1}.coverage{padding:10px}.coverage .ico{width:36px;height:36px;flex-basis:36px}.coverage .metric{border-left:1px solid #e6edf4}.coverage .metric b{font-size:18px;color:#102d4c}.coverage .metric span{color:#687d96;font-size:10px}.coverage .hint{font-size:8px}
+html.embedded .main{grid-template-columns:minmax(0,1.55fr) minmax(520px,1fr);gap:14px;margin:0;height:calc(100vh - 275px);min-height:530px}
+html.embedded .mapwrap{border:1px solid #dfe8f1;border-radius:16px;box-shadow:0 8px 24px rgba(22,48,82,.06)}
+html.embedded .side{display:block;height:100%;min-width:0}
+html.embedded .journey-panel{height:100%;grid-column:auto;padding:16px;border-radius:16px}
+html.embedded .journey-panel h3{font-size:17px;color:#173b5d;margin:0 0 12px}
+html.embedded .employee-profile{min-height:90px;gap:12px;padding:13px;border-color:#e7edf4;border-radius:13px;background:#f9fbfe}
+html.embedded .profile-avatar{position:relative;width:56px;height:56px;flex:0 0 56px;overflow:hidden;border-radius:50%;isolation:isolate}
+html.embedded .profile-photo{z-index:1;display:block}
+html.embedded .profile-copy b{font-size:14px;color:#142f4c}
+html.embedded .profile-stats span{padding:5px 8px;border:1px solid #e6edf4;border-radius:8px;background:#fff}
+html.embedded .profile-link{padding:7px 9px;border:1px solid #dfe8f2;border-radius:9px;background:#fff}
+html.embedded .journey-panel table{min-width:780px;font-size:11px}
+html.embedded .journey-panel th{position:sticky;top:0;background:#f7f9fc;white-space:nowrap;z-index:1}
+html.embedded .journey-panel td{color:#24415e;vertical-align:middle}
+html.embedded .journey-panel tbody tr:hover{background:#f7faff}
+.neutral-status{display:inline-block;padding:5px 8px;border-radius:999px;background:#f0f3f7;color:#667992;font-size:10px;font-weight:750;white-space:nowrap}
+html.embedded .status,html.embedded .danger{white-space:nowrap}
+@media(max-width:1450px){html.embedded .filters{grid-template-columns:repeat(4,minmax(0,1fr))}html.embedded .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.coverage{grid-column:span 3}}
+@media(max-width:1200px){html.embedded body{height:auto;overflow:auto}html.embedded .main{height:auto;grid-template-columns:minmax(0,1fr)}html.embedded .mapwrap{height:min(62vh,620px);min-height:420px}html.embedded .side{height:auto}.journey-panel{min-height:460px}.coverage{grid-column:span 3}}
+@media(max-width:700px){html.embedded .filters{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:11px}html.embedded .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.coverage{grid-column:span 2}html.embedded .main{gap:10px}html.embedded .mapwrap{height:440px;min-height:0}html.embedded .employee-profile{flex-wrap:wrap}html.embedded .profile-link{margin-left:68px}html.embedded .journey-panel{padding:12px}}
+@media(prefers-reduced-motion:reduce){html.embedded .card{animation:none;transition:none}}
+
+/* Compact filter hierarchy and employee route card */
+html.embedded .filters{grid-template-columns:repeat(8,minmax(0,1fr));align-items:end;gap:8px;margin:0 0 10px;padding:10px 12px;border-radius:14px}
+html.embedded .filter label{margin:0 0 4px;font-size:10px}
+html.embedded .filter select,html.embedded .filter input{height:36px;font-size:12px}
+html.embedded .secondary-filters{grid-column:1/-1;min-width:0;border-top:1px solid #edf1f6;padding-top:7px}
+html.embedded .secondary-filters summary{display:flex;align-items:center;gap:10px;color:#25486d;font-size:11px;font-weight:750;cursor:pointer;list-style:none;user-select:none}
+html.embedded .secondary-filters summary::-webkit-details-marker{display:none}
+html.embedded .secondary-filters summary:before{content:'+';display:grid;place-items:center;width:19px;height:19px;border:1px solid #dce6f1;border-radius:6px;color:#1767c9;background:#f7faff;font-size:15px;line-height:1}
+html.embedded .secondary-filters[open] summary:before{content:'−'}
+html.embedded .secondary-filters summary span{font-weight:500;color:#788ba1}
+html.embedded .secondary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding-top:9px}
+html.embedded .kpis{grid-template-columns:repeat(6,minmax(0,1fr)) minmax(290px,1.55fr);gap:9px;margin:0 0 10px}
+html.embedded .kpi{height:68px;min-width:0;padding:9px 11px;gap:9px}
+html.embedded .kpi .ico{width:34px;height:34px;flex-basis:34px;border-radius:10px}
+html.embedded .kpi .value{font-size:20px}
+html.embedded .coverage{padding:7px 9px}
+html.embedded .coverage .metric b{font-size:16px}
+html.embedded .coverage .metric span{font-size:9px}
+html.embedded .coverage .hint{font-size:7px;margin-top:1px}
+html.embedded .main{grid-template-columns:minmax(0,1.3fr) minmax(390px,.9fr);gap:11px;margin:0;height:calc(100vh - 180px);min-height:430px}
+html.embedded .journey-panel{padding:12px;overflow:auto}
+html.embedded .journey-panel h3{display:flex;align-items:center;min-height:25px;margin:0 0 8px;font-size:15px}
+html.embedded .employee-profile{align-items:flex-start;min-height:0;margin:0 0 9px;padding:10px;gap:9px}
+html.embedded .profile-avatar{width:46px;height:46px;flex-basis:46px}
+html.embedded .profile-copy b{font-size:13px}
+html.embedded .profile-copy small{font-size:10px;white-space:normal;overflow-wrap:anywhere}
+html.embedded .profile-stats{gap:5px;margin-top:7px}
+html.embedded .profile-stats span{padding:4px 6px;font-size:9px}
+html.embedded .profile-stats b{font-size:10px}
+html.embedded .profile-tags{margin-top:4px}
+html.embedded .profile-link{font-size:10px;padding:5px 7px}
+.route-sequence{display:grid;gap:0;padding:1px 2px 8px 0}
+.route-stop{position:relative;display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:7px;align-items:start;min-height:60px;padding:0 0 11px}
+.route-stop:not(:last-child):before{content:'';position:absolute;left:11px;top:24px;bottom:0;width:2px;background:#dce9f5}
+.route-number{position:relative;z-index:1;display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#eaf3ff;color:#1676de;font-size:10px;font-weight:800}
+.route-stop-body{min-width:0;padding-top:1px}
+.route-stop-title{font-size:11px;font-weight:750;color:#1d3e60;line-height:1.35}
+.route-stop-meta{display:flex;flex-wrap:wrap;gap:4px 9px;margin-top:4px;color:#72859a;font-size:9px;line-height:1.35}
+.route-stop-meta span{overflow-wrap:anywhere}
+.route-stop-side{display:flex;flex-direction:column;align-items:flex-end;gap:5px;padding-top:2px;text-align:right;color:#556d87;font-size:9px;white-space:nowrap}
+.route-plan{display:inline-flex;align-items:center;border-radius:999px;padding:3px 6px;font-size:9px;font-weight:750}
+.route-plan.correct{background:#e8f8ef;color:#16834a}.route-plan.incorrect{background:#fff0ec;color:#c84b31}.route-plan.neutral{background:#f0f3f7;color:#718198}
+.route-stop:hover .route-number{background:#1478e8;color:white}
+@media(max-width:1450px){html.embedded .filters{grid-template-columns:repeat(4,minmax(0,1fr))}html.embedded .kpis{grid-template-columns:repeat(4,minmax(0,1fr))}.coverage{grid-column:span 2}html.embedded .main{height:calc(100vh - 195px);grid-template-columns:minmax(0,1.15fr) minmax(360px,.9fr)}}
+@media(max-width:1000px){html.embedded body{height:auto;overflow:auto}html.embedded .filters{grid-template-columns:repeat(2,minmax(0,1fr))}html.embedded .secondary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}html.embedded .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.coverage{grid-column:span 3}html.embedded .main{height:auto;grid-template-columns:1fr}html.embedded .mapwrap{height:52vh;min-height:360px}html.embedded .side{height:auto}.journey-panel{min-height:400px}}
+@media(max-width:620px){html.embedded .filters{grid-template-columns:1fr 1fr;padding:9px}.employee-filter{grid-column:1/-1}html.embedded .secondary-grid{grid-template-columns:1fr 1fr}html.embedded .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.coverage{grid-column:span 2}html.embedded .main{gap:9px}html.embedded .mapwrap{height:390px;min-height:0}html.embedded .journey-panel{padding:10px}.route-stop{grid-template-columns:24px minmax(0,1fr) auto;gap:6px}}
+
+.route-profile-extra{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:0 0 10px;padding:8px;border:1px solid #e8eef5;border-radius:10px;background:#fbfdff}
+.route-profile-extra span{display:flex;min-width:0;flex-direction:column;gap:3px}.route-profile-extra small{color:#78899d;font-size:9px}.route-profile-extra b{overflow:hidden;color:#1f405f;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.route-profile-extra .route-live b{color:#17824b}.route-profile-extra .route-idle b{color:#63758a}
+
+html.embedded .filters{grid-auto-flow:row;}
+html.embedded .filter{min-width:0}
+html.embedded .filter select,html.embedded .filter input{min-width:0;padding-left:8px;padding-right:24px;text-overflow:ellipsis}
+.dashboard-status{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 10px;padding:9px 12px;border:1px solid #dce8f6;border-radius:11px;background:#f5f9ff;color:#315574;font-size:12px;font-weight:650}
+.dashboard-status[hidden]{display:none}
+.dashboard-status.loading{background:#f5f9ff;color:#315574}
+.dashboard-status.error{border-color:#f1cbc8;background:#fff4f3;color:#a8342b}
+.dashboard-status.empty-state{border-color:#dce6f0;background:#fff;color:#647b94}
+.dashboard-retry{flex:0 0 auto;border:1px solid #cbdced;border-radius:8px;padding:5px 10px;background:#fff;color:#145daf;font:inherit;font-size:11px;font-weight:750;cursor:pointer}
+.dashboard-retry:hover{background:#eef6ff}
+.map-key{position:absolute;z-index:500;top:12px;left:12px;display:flex;gap:10px;padding:7px 10px;border:1px solid #dce6f0;border-radius:10px;background:#ffffffed;box-shadow:0 3px 12px #173a5b18;color:#45617d;font-size:10px;font-weight:700}
+.map-key span{display:flex;align-items:center;gap:5px}.map-key i{width:9px;height:9px;border-radius:50%;background:#1676da}.map-key .wrong i{background:#dc3545}
+.pin.wrong-plan{box-shadow:0 0 0 2px #dc354544,0 1px 5px #003a6b}
+
+html.embedded .filters{position:sticky;top:0;z-index:1300;background:#fff;box-shadow:0 8px 18px rgba(22,48,82,.08)}
+/* The React shell gives this iframe a viewport-sized window. Keep its own
+   document scrollable so the filter row stays pinned while the map and route
+   panels scroll beneath it. */
+html.embedded,html.embedded body{height:100%;}
+html.embedded body{overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain}
+html.embedded .filters{position:sticky;top:0;z-index:1300}
+@media(max-width:1200px){html.embedded,html.embedded body{height:100%}html.embedded body{overflow-x:hidden;overflow-y:auto}}
+html.embedded .main{grid-template-columns:minmax(0,1.65fr) minmax(360px,.85fr)}
+@media(max-width:1200px){html.embedded .main{grid-template-columns:minmax(0,1fr)}}
+
+/* Route layout: separate identity, key metrics and compact journey timeline. */
+html.embedded .employee-profile{display:grid;grid-template-columns:56px minmax(0,1fr) auto;align-items:start;column-gap:12px;row-gap:12px;width:100%;overflow:hidden;background:#fff;padding:14px;border:1px solid #e0eaf3}
+html.embedded .profile-avatar{width:52px;height:52px;grid-column:1;grid-row:1}
+html.embedded .profile-copy{grid-column:2;grid-row:1;min-width:0}
+html.embedded .profile-copy b{white-space:normal;overflow-wrap:anywhere;line-height:1.35;font-size:14px}
+html.embedded .profile-copy small{overflow-wrap:anywhere;white-space:normal;line-height:1.5;font-size:11px}
+html.embedded .profile-link{grid-column:3;grid-row:1;white-space:nowrap;align-self:start}
+html.embedded .profile-stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:12px}
+html.embedded .profile-stats span{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;padding:9px 10px;background:#f6f9fd;border:1px solid #e7eef6;font-size:10px}
+html.embedded .profile-stats b{font-size:15px}
+html.embedded .route-profile-extra{grid-column:1/-1;grid-row:auto;margin:0;grid-template-columns:repeat(3,minmax(0,1fr));padding:11px}
+html.embedded .journey-panel h3{justify-content:space-between}
+.route-stop{padding:11px 10px;min-height:0;border:1px solid #e8eef6;border-radius:10px;margin:0 0 8px;background:white;cursor:pointer;text-align:left;width:100%;font:inherit}
+.route-stop:hover,.route-stop:focus-visible{background:#f0f7ff;border-color:#90c5f7;outline:none}
+.route-stop:not(:last-child):before{display:none}
+.route-stop-title{font-size:12px}.route-stop-meta{font-size:10px;line-height:1.5}.route-stop-side{font-size:10px}
+.route-map-hint{display:block;color:#0c70d9;font-weight:750;margin-top:5px}
+.route-absence{padding:15px;border-radius:10px;background:#fff8ec;border:1px solid #f5dbad;color:#965b0a;font-size:12px;line-height:1.6}
+@media(max-width:620px){html.embedded .employee-profile{grid-template-columns:45px minmax(0,1fr)}html.embedded .profile-link{grid-column:1/-1;grid-row:2;margin:0!important}html.embedded .profile-stats{grid-template-columns:repeat(2,minmax(0,1fr))}html.embedded .route-profile-extra{grid-column:1/-1}}
+
+.kpi[data-detail]{cursor:pointer;outline-offset:3px}.kpi[data-detail]:focus-visible{outline:3px solid #1874e8}
+.kpi[data-detail]:hover{border-color:#79aef3!important;box-shadow:0 8px 25px #2264a726!important}
+.kpi-modal{border:0;border-radius:18px;padding:0;max-width:min(900px,94vw);width:780px;max-height:85vh;box-shadow:0 22px 80px #10253d5c;color:#173555}
+.kpi-modal::backdrop{background:#0f213d99}.kpi-modal-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:19px 22px;border-bottom:1px solid #dce6f2}
+.kpi-modal-head h3{margin:0;font-size:19px}.kpi-modal-head button{border:0;border-radius:8px;padding:7px 12px;cursor:pointer;background:#edf4fc;color:#185bad}
+.kpi-modal-body{overflow:auto;max-height:66vh;padding:15px 20px}.kpi-modal table{width:100%}.kpi-modal th{position:sticky;top:0;background:#f5f8fc}.kpi-modal td,.kpi-modal th{padding:10px;text-align:left;font-size:12px}
+.kpi-map-button{border:1px solid #d0e1f5;border-radius:7px;padding:5px 8px;background:#f4f9ff;color:#1166c8;cursor:pointer;font-weight:700}
+.actual-plan-value{grid-column:1/-1;width:100%;font-size:12px;font-weight:750;color:#1167bb;padding:9px 11px;border-radius:9px;background:#eaf5ff;border:1px solid #d5e9ff}
+.clear-map-filters{align-self:end;min-height:39px;padding:9px 12px;border-radius:10px;border:1px solid #bfdbfb;background:#edf6ff;color:#075ab6;font-weight:800;cursor:pointer;white-space:nowrap}.clear-map-filters:hover{background:#dceeff}
+.employee-reasons{margin-top:14px;padding:16px;border:1px solid #dce9f7;border-radius:14px;background:#f8fbff}.employee-reasons h4{font-size:15px;color:#193e67;margin:0 0 9px}.employee-reasons h4 small{font-size:10px;color:#6685a5;font-weight:500}.employee-reasons p{font-size:12px;color:#60758c;line-height:1.55;margin:0}.employee-reasons ol{margin:0;padding-left:20px}.employee-reasons li{margin:0 0 9px;line-height:1.55;font-size:12px;color:#264766}
+.profile-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.profile-stats span{min-width:0;border:1px solid #e0eaf6;border-radius:11px;padding:12px!important;background:#f4f8fe;font-size:12px!important}.profile-stats b{display:block;font-size:20px!important;line-height:1.25;color:#153d67}
+.leaflet-popup-content-wrapper{border-radius:14px!important}.popup .grid{grid-template-columns:minmax(100px,auto) minmax(0,1fr)!important;overflow-wrap:anywhere}.popup .grid a{font-weight:700}
+@media(max-width:620px){.clear-map-filters{grid-column:1/-1}.profile-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* 2026-11-11: compact Actual Plan summary directly above the reason summary */
+.actual-plan-cards{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%;margin-top:10px}
+.actual-plan-card{display:flex;flex-direction:column;gap:5px;padding:14px 15px;border-radius:12px;background:#edf5ff;border:1px solid #d5e5f9;min-width:0}
+.actual-plan-card small{font-size:12px;color:#527191;font-weight:700}
+.actual-plan-card strong{font-size:23px;color:#113b68;line-height:1.1}
+.actual-plan-card span{font-size:11px;color:#416487;line-height:1.45}
+.employee-reasons{margin:10px 0 14px!important}
+.leaflet-popup-content{max-height:min(65vh,520px);overflow:auto;min-width:260px}
+.leaflet-popup-content .popup .grid{display:grid;grid-template-columns:110px minmax(0,1fr);gap:6px 8px;word-break:break-word}
+@media(max-width:480px){.actual-plan-cards{grid-template-columns:1fr}.leaflet-popup-content{min-width:210px}}
+
+/* Isolated, responsive Leaflet outlet details — avoids inherited .popup/.grid rules. */
+.leaflet-popup:has(.outlet-detail){max-width:calc(100vw - 24px)!important}
+.leaflet-popup:has(.outlet-detail) .leaflet-popup-content-wrapper{border-radius:16px!important;overflow:hidden;padding:0!important;box-shadow:0 14px 44px rgba(11,35,69,.28)!important}
+.leaflet-popup:has(.outlet-detail) .leaflet-popup-content{width:400px!important;max-width:calc(100vw - 60px)!important;min-width:0!important;margin:0!important;max-height:min(76vh,650px)!important;overflow-x:hidden!important;overflow-y:auto!important}
+.leaflet-popup:has(.outlet-detail) .leaflet-popup-close-button{z-index:5;top:12px!important;right:12px!important;background:#eaf2fc!important;border-radius:50%;width:29px!important;height:29px!important;line-height:27px!important;color:#214e83!important;font-size:21px!important}
+.outlet-detail{display:block!important;width:100%;min-width:0;color:#193959;font:14px/1.5 Inter,"Noto Sans Khmer","Khmer OS System","Segoe UI",Arial,sans-serif;overflow-wrap:break-word;word-break:normal;white-space:normal}
+.outlet-detail *{box-sizing:border-box;min-width:0}
+.outlet-detail__header{padding:18px 48px 14px 20px;background:#f5f9ff;border-bottom:1px solid #dce8f6}
+.outlet-detail__eyebrow{display:block;color:#6a85a2;font-size:10px;letter-spacing:.09em;font-weight:800}
+.outlet-detail__header h3{font-size:21px;line-height:1.25;color:#126bd5;margin:3px 0 0;border:0;padding:0}
+.outlet-detail__body{padding:16px 20px 20px}
+.outlet-detail__distance{display:flex;justify-content:space-between;align-items:center;gap:12px;border-radius:10px;background:#edf6ff;padding:12px 14px;margin-bottom:12px}
+.outlet-detail__distance span{color:#476887;font-weight:700;font-size:13px}
+.outlet-detail__distance strong{font-size:17px;color:#0d4eab;text-align:right;white-space:nowrap}
+.outlet-detail__rows{display:block!important;margin:0!important;padding:0!important}
+.outlet-detail__rows>div{display:grid!important;grid-template-columns:minmax(115px,40%) minmax(0,1fr)!important;gap:12px!important;align-items:start;padding:10px 0;border-bottom:1px solid #ecf1f8}
+.outlet-detail__rows dt{font-size:12px;font-weight:750;color:#617b98;margin:0!important}
+.outlet-detail__rows dd{font-size:13px;font-weight:650;color:#193959;margin:0!important;min-width:0;overflow-wrap:break-word;word-break:normal;white-space:normal;line-height:1.6}
+.outlet-detail__status{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800}
+.outlet-detail__status--bad{color:#c33b2e;background:#fff0ed}.outlet-detail__status--ok{color:#128258;background:#e8f8f1}
+.outlet-detail__evidence{margin-top:14px}.outlet-detail__evidence>span{display:block;font-size:10px;color:#6e839b;font-weight:800;letter-spacing:.06em;margin-bottom:7px}
+.outlet-detail__evidence .report-photo{display:block!important;float:none!important;position:static!important;margin:0!important;width:100%!important;max-width:100%!important;height:auto!important;min-height:75px;border-radius:10px;overflow:hidden;border:1px solid #dce8f6;background:#f3f8ff;text-align:center}
+.outlet-detail__evidence .report-photo img{display:block;width:100%!important;max-height:150px;object-fit:cover;float:none!important}
+.outlet-detail__evidence .photo-fallback{padding:12px;min-height:60px;place-items:center}
+.outlet-detail__directions{display:block!important;margin-top:16px;padding:13px 15px;background:#1169da;color:#fff!important;text-align:center;text-decoration:none!important;border-radius:10px;font-size:13px;font-weight:800;line-height:1.4}
+.outlet-detail__directions:hover,.outlet-detail__directions:focus-visible{background:#0953ac;color:#fff!important}
+@media(max-width:480px){.outlet-detail__header{padding:15px 44px 12px 15px}.outlet-detail__body{padding:12px 15px 16px}.outlet-detail__rows>div{grid-template-columns:minmax(94px,39%) minmax(0,1fr)!important;gap:9px!important}.outlet-detail__rows dt{font-size:11px}.outlet-detail__rows dd{font-size:12px}.outlet-detail__distance{padding:10px}.outlet-detail__distance strong{font-size:15px}}
+
+/* 2026-11-12: isolated compact check-in popup; never allow photo fallback to cover data. */
+.leaflet-popup.outlet-map-popup{max-width:calc(100vw - 20px)!important}
+.leaflet-popup.outlet-map-popup .leaflet-popup-content-wrapper{background:#fff!important;border-radius:16px!important;box-shadow:0 18px 45px #0d29402e!important;padding:0!important;overflow:hidden!important}
+.leaflet-popup.outlet-map-popup .leaflet-popup-content{width:360px!important;min-width:0!important;max-width:calc(100vw - 52px)!important;margin:0!important;max-height:min(72vh,590px)!important;overflow:auto!important}
+.leaflet-popup.outlet-map-popup .leaflet-popup-close-button{z-index:7!important;right:12px!important;top:12px!important;background:#eaf3ff!important;border-radius:50%!important;width:28px!important;height:28px!important;font-size:22px!important;line-height:28px!important;color:#1e578c!important}
+.outlet-detail{width:100%!important;min-width:0!important;max-width:100%!important;display:block!important;color:#203b58;overflow:visible!important}
+.outlet-detail__body{display:block!important;padding:15px 18px 18px!important}
+.outlet-detail__rows{display:block!important;clear:both!important;margin:0!important;padding:0!important}
+.outlet-detail__rows>div{display:grid!important;grid-template-columns:125px minmax(0,1fr)!important;column-gap:12px!important;align-items:start!important}
+.outlet-detail__rows dt,.outlet-detail__rows dd{min-width:0!important;max-width:100%!important;white-space:normal!important;overflow-wrap:break-word!important;word-break:normal!important}
+.outlet-detail__directions{display:block!important;position:relative!important;clear:both!important;margin-top:16px!important}
+.outlet-detail__evidence{clear:both!important;position:relative!important;display:block!important}
+.outlet-detail__evidence a{display:inline-flex!important;position:static!important;float:none!important;width:auto!important;height:auto!important;margin:0!important;padding:8px 10px!important;border-radius:8px!important;background:#eef5ff!important;color:#095ec7!important;text-decoration:none!important}
+@media(max-width:460px){.outlet-detail__rows>div{grid-template-columns:108px minmax(0,1fr)!important;gap:8px!important}.outlet-detail__body{padding:12px 14px 15px!important}}
+.employee-position{display:inline-block;margin-top:5px;color:#4d6986;font-size:11px;font-weight:650}
+.employee-reasons .reason-pending{border-left:3px solid #e3a246;background:#fff8ee;border-radius:6px;padding:8px 10px}
+.employee-reasons .reason-status{color:#986716;font-weight:750}
+</style><link rel="stylesheet" href="/static/dashboard-compact.css?v=20261113-map-7"><link rel="stylesheet" href="/static/dashboard-responsive.css?v=responsive-1"></head><body>
+<header class="top"><div class="brand"><img class="brand-logo" src="/static/chip_mong_foodbev.jpg" alt="Chip Mong FoodBev"><div class="title">Sales Live Check-In Tracking</div></div><div><span class="live"><i></i><span id="mode">LIVE</span></span><span id="lastTop">Last refresh: —</span><span class="switch">Real time <b>ON</b></span></div></header>
+<section class="filters">
+  <div class="filter"><label for="date">Date</label><input id="date" type="date"></div>
+  <div class="filter"><label for="region">Region</label><select id="region"></select></div>
+  <div class="filter"><label for="dealer">Dealer</label><select id="dealer"></select></div>
+  <div class="filter employee-filter"><label for="employee">Search employee</label><input id="employee" type="search" autocomplete="off" aria-autocomplete="list" aria-controls="employeeSuggestions" placeholder="Employee ID or name…"><div id="employeeSuggestions" class="employee-suggestions" role="listbox" hidden></div></div>
+  <div class="filter"><label for="province">Province</label><select id="province"></select></div>
+  <div class="filter"><label for="district">District</label><select id="district"></select></div>
+  <div class="filter"><label for="commune">Commune</label><select id="commune"></select></div>
+  <button type="button" class="clear-map-filters" id="clearMapFilters" title="Clear region, dealer, employee and location filters">← Back / Clear filters</button>
+</section>
+<div id="dashboardStatus" class="dashboard-status" role="status" aria-live="polite" hidden></div>
+<section class="kpis"><div class="card kpi"><div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div><div class="label">Sales Checked In</div><div class="value" id="active">0</div></div></div><div class="card kpi"><div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></div><div><div class="label">Total Check-Ins</div><div class="value" id="total">0</div></div></div><div class="card kpi"><div class="ico orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v4m0 3h.01"/></svg></div><div><div class="label">Missing Reports</div><div class="value" id="missing">0</div></div></div><div class="card kpi"><div class="ico orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></div><div><div class="label">Over 10 km</div><div class="value" id="over10">0</div></div></div><div class="card kpi"><div class="ico orange"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/></svg></div><div><div class="label">Actual Plan</div><div class="value" id="actualPlan">—</div></div></div><div class="card kpi"><div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M9 15l2 2 4-4"/></svg></div><div><div class="label">Annual Leave</div><div class="value" id="al">0</div></div></div><div class="card kpi coverage"><div class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10 15.3 15.3 0 0 1 4-10Z"/></svg></div><div class="metric"><b id="pcover">0</b><span>Provinces</span></div><div class="metric"><b id="dcover">0</b><span>Districts</span></div><div class="metric"><b id="ccover">0</b><span>Communes</span></div></div></section>
+<dialog class="kpi-modal" id="kpiModal"><div class="kpi-modal-head"><h3 id="kpiModalTitle">Details</h3><button type="button" id="kpiModalClose">Close ✕</button></div><div class="kpi-modal-body" id="kpiModalBody"></div></dialog>
+<main class="main"><div class="mapwrap"><div id="map"></div><div class="map-key" aria-label="Outlet plan status"><span><i></i>Outlet</span><span class="wrong"><i></i>Wrong plan</span></div></div><aside class="side"><section class="card panel journey-panel"><h3 id="journeyTitle">Employee Route</h3><div id="employeeProfile" class="employee-profile empty-profile">Search or select an employee to see their profile and outlet route.</div><section id="employeeReasons" class="employee-reasons" aria-live="polite"><h4>Summary Reason</h4><p>Select an employee to review written missed-report reasons.</p></section><div id="journeys" class="route-sequence"><div class="empty">Choose an employee to see the route sequence.</div></div></section></aside></main>
+<footer class="foot"><span>⟳ Auto-refresh every 5 minutes</span><span>● Data quality: <b id="dq">Loading</b></span><span>▰ Last successful warehouse sync: <b id="wh">—</b></span><span id="rows">0 rows</span></footer>
+<script>
+const $=id=>document.getElementById(id),imagery=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri World Imagery',updateWhenIdle:true,keepBuffer:2}),labels=L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,updateWhenIdle:true,keepBuffer:2}),satellite=L.layerGroup([imagery,labels]),lightBase=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:16,attribution:'Esri Light Gray Canvas',updateWhenIdle:true,keepBuffer:2}),lightLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',{maxZoom:16,updateWhenIdle:true,keepBuffer:2}),lightMap=L.layerGroup([lightBase,lightLabels]),street=L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri World Street Map',updateWhenIdle:true,keepBuffer:2}),terrain=L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri World Topographic Map',updateWhenIdle:true,keepBuffer:2}),map=L.map('map',{zoomControl:true,preferCanvas:true}).setView([12.5657,104.9910],7);satellite.addTo(map);let raw=null,layers=L.layerGroup().addTo(map),dealerLayer=L.layerGroup(),timer=null,loadVersion=0,employeeChoices=[],routeCache=new Map(),routeLoadKey='',routeRequestVersion=0,markerByPin=new Map(),pendingAlertFocus=null,lastOpenOutletPin=null;L.control.layers({'Satellite (Default)':satellite,'Light':lightMap,'Street':street,'Terrain':terrain},{'Check-ins and routes':layers,'Dealer locations':dealerLayer},{collapsed:true,position:'topright'}).addTo(map);const ids=['region','dealer','province','district','commune','employee'],esc=s=>String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+function option(id,values,label){const el=$(id),old=el.value;el.innerHTML=`<option value="">All${label?' '+label:''}</option>`+[...new Set(values.filter(Boolean))].sort().map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');if([...el.options].some(x=>x.value===old))el.value=old}
+function geoKm(a,b){if(!a||!b)return null;const rad=n=>n*Math.PI/180,dlat=rad(b.latitude-a.latitude),dlon=rad(b.longitude-a.longitude),x=Math.sin(dlat/2)**2+Math.cos(rad(a.latitude))*Math.cos(rad(b.latitude))*Math.sin(dlon/2)**2;return 6371*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
+function filtered(){return (raw?.checkins||[]).filter(x=>!$('region').value||x.region===$('region').value).filter(x=>!$('dealer').value||x.dealer===$('dealer').value).filter(x=>!$('province').value||x.province===$('province').value).filter(x=>!$('district').value||x.district===$('district').value).filter(x=>!$('commune').value||x.commune===$('commune').value).filter(x=>!$('employee').value||`${x.employee_id} ${x.real_name} ${x.telegram_id}`.toLowerCase().includes($('employee').value.trim().toLowerCase()))}
+function outletTarget(row){return Number(row['#ws/ds']||row.ws_ds||0)+Number(row['#horeca outlet']||row.horeca||0)}
+function renderActualPlan(data){
+ const unique=new Set(data.map(x=>String(x.pin_id)));
+ const q=$('employee').value.trim().toLowerCase();
+ const targets=(raw.plan_targets||[]).filter(x=>(!$('region').value||x.region===$('region').value)&&(!$('dealer').value||x.dealer===$('dealer').value)&&(!q||`${x.employee_id}`.toLowerCase().includes(q)||data.some(v=>String(v.employee_id)===String(x.employee_id))));
+ const count=targets.reduce((n,x)=>n+Number(x.total_outlets||0),0);
+ $('actualPlan').textContent=count?`${(unique.size/count*100).toFixed(2)}%`:'—';
+ $('actualPlan').title=count?`${unique.size} check-ins / ${count} planned outlets`:'Plan outlet targets not uploaded';
+}
+function openKpiDetails(type){
+ if(!raw)return;
+ const data=filtered(),q=$('employee').value.trim().toLowerCase();
+ const missing=(raw.missing_rows||[]).filter(x=>(!$('region').value||x.region===$('region').value)&&(!$('dealer').value||x.dealer===$('dealer').value)&&(!q||`${x.employee_id} ${x.real_name} ${x.telegram_id}`.toLowerCase().includes(q)));
+ let items=type==='missing'?missing:type==='al'?(raw.leaves||[]).filter(x=>(!$('region').value||x.region===$('region').value)&&(!$('dealer').value||x.dealer===$('dealer').value)&&(!q||`${x.employee_id} ${x.real_name} ${x.telegram_id}`.toLowerCase().includes(q))):data;
+ if(type==='over10')items=data.filter(x=>Number(x.road_distance_km)>10);
+ if(type==='wrong')items=data.filter(x=>String(x.plan_check).toLowerCase()==='incorrect');
+ if(type==='actual')items=data;
+ if(type==='actual'){
+  const search=$('employee').value.trim().toLowerCase();
+  const targets=(raw.plan_targets||[]).filter(x=>(!$('region').value||x.region===$('region').value)&&(!$('dealer').value||x.dealer===$('dealer').value)&&(!search||String(x.employee_id).includes(search)||data.some(v=>String(v.employee_id)===String(x.employee_id))));
+  const byEmployee=new Map();for(const visit of data){const id=String(visit.employee_id);if(!byEmployee.has(id))byEmployee.set(id,[]);byEmployee.get(id).push(visit)}
+  const employeeNames=new Map((raw.checkins||[]).map(v=>[String(v.employee_id),v.real_name]));const planned=targets.reduce((sum,x)=>sum+Number(x.total_outlets||0),0),visited=data.length;
+  $('kpiModalTitle').textContent='Actual Plan — all assigned outlets / visits';
+  $('kpiModalBody').innerHTML=`<p><strong>${visited.toLocaleString()} actual check-ins / ${planned.toLocaleString()} planned outlets = ${planned?(visited/planned*100).toFixed(2)+'%':'Not available'}</strong></p><p>Target counts come from #WS/DS and #HORECA Outlet; wrong-plan visits remain flagged on their outlet details.</p><table><thead><tr><th>Name</th><th>Region</th><th>Dealer</th><th>WS/DS</th><th>HORECA</th><th>Plan outlets</th><th>Actual</th><th>Coverage</th><th>Map</th></tr></thead><tbody>${targets.map(x=>{const visits=byEmployee.get(String(x.employee_id))||[],n=visits.length,target=Number(x.total_outlets||0);return `<tr><td>${esc(x.real_name||employeeNames.get(String(x.employee_id))||x.employee_id)}</td><td>${esc(x.region)}</td><td>${esc(x.dealer)}</td><td>${x.ws_ds}</td><td>${x.horeca}</td><td>${target}</td><td>${n}</td><td>${target?(n/target*100).toFixed(2)+'%':'—'}</td><td>${visits.length?`<button class="kpi-map-button" data-jump-pin="${esc(visits[0].pin_id)}">Show on map ↗</button>`:'—'}</td></tr>`}).join('')||'<tr><td colspan="9">No outlet targets in the uploaded plan.</td></tr>'}</tbody></table>`;
+  $('kpiModal').showModal();return;
+ }
+ const names={total:'Total Check-Ins',missing:'Missing Reports',over10:'Over 10 km',wrong:'Wrong Plan',active:'Sales Checked In',al:'Annual Leave',actual:'Actual Plan — outlets visited / all planned outlets'};
+ $('kpiModalTitle').textContent=names[type]||'Details';
+ const targets=new Map((raw.plan_targets||[]).map(x=>[String(x.employee_id),x]));
+ const rows=items.slice(0,1500).map(x=>{
+  const target=targets.get(String(x.employee_id));
+  const detail=type==='missing'?`Missed ${String(x.missing_start||'—').replace('T',' ').slice(0,16)} · Reason: ${x.summary_reason||'Not provided'}`:type==='actual'?(target?.total_outlets?`Plan ${target.total_outlets} outlets`:'Plan target unavailable'):(type==='over10'?`${Number(x.road_distance_km||0).toFixed(2)} km`:(x.pin_time||x.source||x.plan_check||'—'));
+  const link=x.pin_id?`<button class="kpi-map-button" data-jump-pin="${esc(x.pin_id)}">Show on map ↗</button>`:(x.telegram_id?`<button class="kpi-map-button" data-jump-employee="${esc(x.employee_id||x.telegram_id)}">Employee route ↗</button>`:'—');
+  return `<tr><td>${esc(x.real_name||'—')}</td><td>${esc(x.region||'—')}</td><td>${esc(x.dealer||'—')}</td><td>${esc(detail)}</td><td>${link}</td></tr>`;
+ }).join('');
+ $('kpiModalBody').innerHTML=`<p>${items.length.toLocaleString()} records ${items.length>1500?'(showing first 1,500)':''}</p><table><thead><tr><th>Employee</th><th>Region</th><th>Dealer</th><th>${type==='missing'?'Miss Report Time':'Detail'}</th><th>Action</th></tr></thead><tbody>${rows||'<tr><td colspan="5">No matching records.</td></tr>'}</tbody></table>`;
+ $('kpiModal').showModal();
+}
+for(const [id,type] of Object.entries({total:'total',missing:'missing',over10:'over10',al:'al',active:'active',actualPlan:'actual'})){
+ const el=$(id)?.closest('.kpi');if(el){el.dataset.detail=type;el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-label',`View ${type} details`);el.addEventListener('click',()=>openKpiDetails(type));el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openKpiDetails(type)}})}
+}
+$('kpiModalClose').addEventListener('click',()=>$('kpiModal').close());
+$('kpiModalBody').addEventListener('click',event=>{const pin=event.target.closest('[data-jump-pin]'),employee=event.target.closest('[data-jump-employee]');if(pin){$('kpiModal').close();focusOutlet(pin.dataset.jumpPin)}else if(employee){$('kpiModal').close();$('employee').value=employee.dataset.jumpEmployee;render()}});
+function populate(){const x=raw.checkins||[],d=raw.dealers||[];option('region',[...x.map(v=>v.region),...d.map(v=>v.region)],'Regions');let rows=x.filter(v=>!$('region').value||v.region===$('region').value),stations=d.filter(v=>!$('region').value||v.region===$('region').value);option('dealer',[...rows.map(v=>v.dealer),...stations.map(v=>v.dealer)],'Dealers');rows=rows.filter(v=>!$('dealer').value||v.dealer===$('dealer').value);option('province',rows.map(v=>v.province),'Provinces');rows=rows.filter(v=>!$('province').value||v.province===$('province').value);option('district',rows.map(v=>v.district),'Districts');rows=rows.filter(v=>!$('district').value||v.district===$('district').value);option('commune',rows.map(v=>v.commune),'Communes');rows=rows.filter(v=>!$('commune').value||v.commune===$('commune').value);employeeChoices=[...new Map(rows.map(v=>[String(v.telegram_id||v.employee_id),v])).values()].sort((a,b)=>String(a.real_name||'').localeCompare(String(b.real_name||'')))}
+function filterChanged(id){const order=['region','dealer','province','district','commune','employee'];const index=order.indexOf(id);if(index>=0)order.slice(index+1).forEach(key=>$(key).value='');populate();render()}
+let indexedPlanRows=null,plansByEmployee=new Map(),plansByName=new Map();
+function normalizedPlanName(value){return String(value||'').trim().toLowerCase().replace(/\s+/g,' ')}
+function ensurePlanIndex(){const rows=raw?.plan_communes||[];if(rows===indexedPlanRows)return;indexedPlanRows=rows;plansByEmployee=new Map();plansByName=new Map();for(const plan of rows){const employee=String(plan.employee_id||'').trim(),name=normalizedPlanName(plan.real_name);if(employee){if(!plansByEmployee.has(employee))plansByEmployee.set(employee,[]);plansByEmployee.get(employee).push(plan)}if(name){if(!plansByName.has(name))plansByName.set(name,[]);plansByName.get(name).push(plan)}}}
+function plannedFor(visit){ensurePlanIndex();const employee=String(visit.employee_id||'').trim(),name=normalizedPlanName(visit.real_name),direct=plansByEmployee.get(employee)||[],nameMatches=plansByName.get(name)||[],scopedNames=nameMatches.filter(p=>(!visit.region||p.region===visit.region)&&(!visit.dealer||p.dealer===visit.dealer)),matched=direct.length?direct:(scopedNames.length?scopedNames:nameMatches),values=[...new Map(matched.map(p=>{const commune=String(p.planned_commune||'').trim(),code=String(p.planned_commune_code||'').trim();return [commune.toLowerCase()+'|'+code,{commune,code}]})).values()].filter(p=>p.commune);return values.length?values.map(p=>p.commune+(p.code?' ('+p.code+')':'')).join(', '):'No plan'}
+function ensureEmployeeRoute(profile){if(!profile){if(routeLoadKey){routeLoadKey='';routeRequestVersion++;if((raw.routes||[]).length){raw.routes=[];requestAnimationFrame(render)}}return}const uid=String(profile.telegram_id||'');if(!uid)return;const day=raw.date,key=`${day}:${uid}`;if(routeLoadKey===key)return;routeLoadKey=key;const cached=routeCache.get(key);if(cached){raw.routes=cached;requestAnimationFrame(render);return}raw.routes=[];const request=++routeRequestVersion;fetch(`/api/v1/dashboard/routes?day=${encodeURIComponent(day)}&telegram_id=${encodeURIComponent(uid)}`,{cache:'no-store'}).then(res=>{if(!res.ok)throw Error('Route request failed');return res.json()}).then(payload=>{if(request!==routeRequestVersion||routeLoadKey!==key||raw?.date!==day)return;const stillSelected=filtered().some(x=>String(x.telegram_id||'')===uid);if(!stillSelected)return;const routes=payload.routes||[];routeCache.set(key,routes);if(routeCache.size>40)routeCache.delete(routeCache.keys().next().value);raw.routes=routes;render()}).catch(()=>{if(request===routeRequestVersion&&routeLoadKey===key){raw.routes=[];render()}})}
+function hideEmployeeSuggestions(){const box=$('employeeSuggestions');box.hidden=true;box.innerHTML='';$('employee').setAttribute('aria-expanded','false')}
+function renderEmployeeSuggestions(){const query=$('employee').value.trim().toLowerCase(),box=$('employeeSuggestions');if(!query){hideEmployeeSuggestions();return}const matches=employeeChoices.filter(p=>`${p.employee_id||''} ${p.real_name||''} ${p.telegram_id||''}`.toLowerCase().includes(query)).slice(0,8);box.innerHTML=matches.map(p=>`<button type="button" class="employee-suggestion" role="option" data-id="${esc(p.employee_id||p.telegram_id)}"><b>${esc(p.employee_id||p.telegram_id)}</b><span>${esc(p.real_name||'Unknown name')}</span><small>${esc(p.region||'—')} · ${esc(p.dealer||'—')}</small></button>`).join('');box.hidden=!matches.length;$('employee').setAttribute('aria-expanded',String(matches.length>0))}
+
+function render(){const previouslyOpen=lastOpenOutletPin;const data=filtered();if(!raw.checkins?.length)setDashboardState(`No check-ins were returned for ${raw.date}.`,'empty-state');else if(!data.length)setDashboardState('No check-ins match the current filters. Adjust or clear a filter to see results.','empty-state');else setDashboardState('');const selectedPaths=new Set(data.map(x=>x.path_id)),routeByPin={},distanceFallback={};layers.clearLayers();markerByPin.clear();(raw.routes||[]).filter(x=>selectedPaths.has(x.path_id)).forEach(x=>{if(x.is_checkin)routeByPin[x.pin_id]=x});const fallbackPaths={};data.forEach(x=>(fallbackPaths[x.path_id]??=[]).push(x));Object.values(fallbackPaths).forEach(points=>{points.sort((a,b)=>Number(a.point_order)-Number(b.point_order));let previous=raw.dealers.find(d=>d.dealer===points[0]?.dealer&&(!points[0]?.region||d.region===points[0].region))||null;points.forEach(point=>{distanceFallback[point.pin_id]=geoKm(previous,point);previous=point})});$('active').textContent=new Set(data.map(x=>String(x.telegram_id||x.employee_id))).size;$('total').textContent=data.length;renderActualPlan(data);const missingQuery=$('employee').value.trim().toLowerCase(),scopedMissing=(raw.missing_rows||[]).filter(x=>(!$('region').value||x.region===$('region').value)&&(!$('dealer').value||x.dealer===$('dealer').value)&&(!missingQuery||`${x.employee_id||''} ${x.real_name||''} ${x.telegram_id||''}`.toLowerCase().includes(missingQuery)));$('missing').textContent=raw.missing_rows?scopedMissing.length:(raw.missing_count??0);$('over10').textContent=data.filter(x=>Number(routeByPin[x.pin_id]?.road_distance_km??x.road_distance_km??distanceFallback[x.pin_id])>10).length;const employeeQuery=$('employee').value.trim().toLowerCase(),leaveRows=(raw.leaves||[]).filter(x=>(!$('region').value||x.region===$('region').value)&&(!$('dealer').value||x.dealer===$('dealer').value)&&(!employeeQuery||`${x.employee_id} ${x.real_name} ${x.telegram_id}`.toLowerCase().includes(employeeQuery))),leaveIds=new Set(leaveRows.map(x=>String(x.employee_id||x.telegram_id)));$('al').textContent=leaveIds.size;const actual={provinces:new Set(data.map(x=>x.province).filter(Boolean)).size,districts:new Set(data.map(x=>x.district).filter(Boolean)).size,communes:new Set(data.map(x=>x.commune_code||x.commune).filter(Boolean)).size},master=raw.coverage_master||{provinces:25,districts:210,communes:1651};$('pcover').innerHTML=`${master.provinces}<span class="slash">/</span><span class="actual">${actual.provinces}</span>`;$('dcover').innerHTML=`${master.districts}<span class="slash">/</span><span class="actual">${actual.districts}</span>`;$('ccover').innerHTML=`${master.communes}<span class="slash">/</span><span class="actual">${actual.communes}</span>`;const bounds=[];
+ const rg={};(raw.routes||[]).filter(x=>selectedPaths.has(x.path_id)).forEach(x=>(rg[x.path_id]??=[]).push(x));Object.values(rg).forEach(points=>{points.sort((a,b)=>a.point_order-b.point_order);const xy=points.map(p=>[p.latitude,p.longitude]);if(xy.length>1)L.polyline(xy,{color:'#19d0e9',weight:5,opacity:.95}).addTo(layers);bounds.push(...xy)});
+ const checkinPaths={};data.forEach(x=>(checkinPaths[x.path_id]??=[]).push(x));Object.entries(checkinPaths).forEach(([path,points])=>{points.sort((a,b)=>a.point_order-b.point_order);const station=raw.dealers.find(d=>d.dealer===points[0]?.dealer&&(!points[0]?.region||d.region===points[0].region));let previous=station||null;points.forEach(p=>{distanceFallback[p.pin_id]=geoKm(previous,p);previous=p});if(rg[path]?.length)return;const xy=[];if(station)xy.push([station.latitude,station.longitude]);xy.push(...points.map(p=>[p.latitude,p.longitude]));if(xy.length>1)L.polyline(xy,{color:'#19d0e9',weight:4,opacity:.8,dashArray:'8 7'}).bindTooltip('Historical check-in sequence').addTo(layers);bounds.push(...xy)});
+ const scopedDealerFilter=Boolean($('province').value||$('district').value||$('commune').value||$('employee').value),dataDealers=new Set(data.map(x=>x.dealer));const visibleDealers=(raw.dealers||[]).filter(d=>(!$('region').value||d.region===$('region').value)&&(!$('dealer').value||d.dealer===$('dealer').value)&&(!scopedDealerFilter||dataDealers.has(d.dealer)));visibleDealers.forEach(d=>{const icon=L.divIcon({className:'dealer-icon',html:'<span class="dealer-marker" aria-label="Chip Mong dealer"></span>',iconSize:L.point(34,34),iconAnchor:L.point(17,17),popupAnchor:L.point(0,-18)});L.marker([d.latitude,d.longitude],{icon,zIndexOffset:1000,riseOnHover:true}).bindTooltip(`${esc(d.region)}-${esc(d.dealer)}`,{direction:'top',offset:[0,-15]}).bindPopup(`<div class="popup"><h3>Dealer: ${esc(d.dealer)}</h3><div class="grid"><b>Region</b><span>${esc(d.region)}</span><b>Province</b><span>${esc(d.province||'—')}</span><b>District</b><span>${esc(d.district||'—')}</span><b>Commune</b><span>${esc(d.commune||'—')}</span></div></div>`).addTo(dealerLayer);bounds.push([d.latitude,d.longitude])});
+ const checkinCluster=L.markerClusterGroup({chunkedLoading:true,chunkInterval:100,chunkDelay:25,maxClusterRadius:45,removeOutsideVisibleBounds:true,showCoverageOnHover:false});data.forEach(x=>{const gps=x.pin_source==='telegram_location',first=Number(x.point_order)===1,wrongPlan=String(x.plan_check||'').toLowerCase()==='incorrect',color=wrongPlan?'#dc3545':'#1676da',home='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 12h3v9h6v-6h2v6h6v-9h3L12 3z"/></svg>',icon=L.divIcon({className:'',html:`<div class="pin ${wrongPlan?'wrong-plan':''}" style="background:${color}">${home}</div>`,iconSize:[28,28],iconAnchor:[14,14]});const route=routeByPin[x.pin_id],roadDistance=route?.road_distance_km??x.road_distance_km,distance=roadDistance??distanceFallback[x.pin_id],estimated=roadDistance==null&&distance!=null,from=first?'Dealer':'Previous Outlet',user=x.username?'@'+x.username.replace('@',''):'ID '+x.telegram_id,source=gps?'GPS Pin':'Image OCR / Coordinate',imageLink=esc(x.open_image||x.open_telegram),photo=(x.open_image||x.open_telegram)?`<a href="${imageLink}" target="_blank" rel="noopener noreferrer">Open Telegram evidence ↗</a>`:'';const marker=L.marker([x.latitude,x.longitude],{icon}).bindPopup(`<section class="outlet-detail" aria-label="Outlet ${esc(x.point_order)} details"><header class="outlet-detail__header"><span class="outlet-detail__eyebrow">CHECK-IN DETAILS</span><h3>Outlet ${esc(x.point_order)}</h3></header><div class="outlet-detail__body"><div class="outlet-detail__distance"><span>From ${from}</span><strong>${distance==null?'—':(estimated?'≈ ':'')+Number(distance).toFixed(2)+' km'}</strong></div><dl class="outlet-detail__rows"><div><dt>Region / Dealer</dt><dd>${esc(x.region)} / ${esc(x.dealer)}</dd></div><div><dt>District</dt><dd>${esc(x.district||'—')}</dd></div><div><dt>Actual Commune</dt><dd>${esc(x.commune||'—')}</dd></div><div><dt>Plan Commune</dt><dd>${esc(plannedFor(x))}</dd></div><div><dt>Plan Status</dt><dd><span class="outlet-detail__status ${wrongPlan?'outlet-detail__status--bad':'outlet-detail__status--ok'}">${esc(x.plan_check||'Not checked')}</span></dd></div><div><dt>Employee Name</dt><dd>${esc(x.real_name||'—')}</dd></div><div><dt>Check-in Time</dt><dd>${esc(x.pin_time||'—')}</dd></div></dl>${photo?`<div class="outlet-detail__evidence"><span>REPORT PHOTO</span>${photo}</div>`:''}<a class="outlet-detail__directions" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(x.latitude+','+x.longitude)}" target="_blank" rel="noopener noreferrer" aria-label="Directions from my location to Outlet ${esc(x.point_order)}">Directions from my location ↗</a></div></section>`,{maxWidth:310,minWidth:260,maxHeight:Math.min(470,Math.floor(window.innerHeight*.65)),autoPan:true,autoPanPadding:[28,28],closeButton:true,keepInView:true,className:"outlet-map-popup"});marker.on('popupopen',()=>{lastOpenOutletPin=String(x.pin_id)});markerByPin.set(String(x.pin_id),{marker,cluster:checkinCluster,visit:x});checkinCluster.addLayer(marker);bounds.push([x.latitude,x.longitude])});layers.addLayer(checkinCluster);
+ // Markers are reconstructed on route refresh. Restore the open outlet popup
+ // after redraw rather than losing the user's selected outlet details.
+ if(previouslyOpen&&markerByPin.has(String(previouslyOpen))){
+   const target=markerByPin.get(String(previouslyOpen));
+   const reveal=()=>target.marker.openPopup();
+   if(typeof checkinCluster.zoomToShowLayer==='function')checkinCluster.zoomToShowLayer(target.marker,reveal);
+   else reveal();
+ }else if(previouslyOpen){lastOpenOutletPin=null;}
+
+ const employeeRows=[...new Map(data.map(x=>[String(x.telegram_id||x.employee_id),x])).values()];
+ const profile=employeeQuery?(employeeRows.find(x=>String(x.employee_id||x.telegram_id).toLowerCase()===employeeQuery||String(x.real_name||'').toLowerCase()===employeeQuery)||(employeeRows.length===1?employeeRows[0]:null)):null;
+ const selectedId=profile?String(profile.employee_id||profile.telegram_id):'';
+ ensureEmployeeRoute(profile);
+ const journey=profile?data.filter(x=>String(x.employee_id||x.telegram_id)===selectedId).sort((a,b)=>Number(a.point_order)-Number(b.point_order)):[];
+ const journeyRows=journey.map((x,i)=>{
+   const roadDistance=routeByPin[x.pin_id]?.road_distance_km??x.road_distance_km;
+   const distance=roadDistance??distanceFallback[x.pin_id];
+   return {visit:x,index:i,distance,estimated:roadDistance==null&&distance!=null};
+ });
+ const distanceRows=journeyRows.filter(x=>x.distance!=null);
+ const routeKm=distanceRows.reduce((sum,x)=>sum+Number(x.distance),0);
+ const routeApprox=distanceRows.some(x=>x.estimated);
+ $('journeyTitle').textContent=profile?`Employee Route · ${journey.length} Outlet(s)`:'Employee Route';
+ if(profile){
+   const initials=String(profile.real_name||'?').trim().split(/\s+/).map(x=>x[0]||'').join('').slice(0,2).toUpperCase();
+   const profileUser=profile.username?'@'+String(profile.username).replace('@',''):'Telegram ID '+profile.telegram_id;
+   const districts=new Set(journey.map(x=>x.district).filter(Boolean)).size;
+   const communes=new Set(journey.map(x=>x.commune_code||x.commune).filter(Boolean)).size;
+   const correct=journey.filter(x=>String(x.plan_check||'').toLowerCase()==='correct').length;
+   const incorrect=journey.filter(x=>String(x.plan_check||'').toLowerCase()==='incorrect').length;
+   $('employeeProfile').className='employee-profile';
+   $('employeeProfile').innerHTML=`<div class="profile-avatar">${esc(initials)}<img class="profile-photo" src="/api/v1/dashboard/telegram-avatar/${encodeURIComponent(profile.telegram_id)}" alt="" loading="lazy" onerror="this.remove()"></div><div class="profile-copy"><b>${esc(profile.real_name||'Sales employee')}</b><small>Employee ID ${esc(profile.employee_id||'—')} · Telegram ${esc(profileUser)}</small><span class="employee-position">Position: ${esc(profile.position||profile.role||'Not recorded')}</span><div class="profile-tags"><span>${esc(profile.region||'—')}</span><span>Dealer ${esc(profile.dealer||'—')}</span></div></div><div class="profile-stats"><span><b>${journey.length}</b> check-ins</span><span><b>${new Set((raw.employees||raw.profiles||raw.checkins||[]).map(v=>String(v.employee_id||v.telegram_id)).filter(Boolean)).size}</b> total users in data</span><span><b>${districts}</b> districts</span><span><b>${communes}</b> communes</span>${distanceRows.length?`<span><b>${routeApprox?'≈ ':''}${routeKm.toFixed(1)} km</b> route</span>`:''}<span><b>${correct}</b> correct</span><span><b>${incorrect}</b> incorrect</span></div>`;
+ }else{
+   $('employeeProfile').className='employee-profile empty-profile';
+   $('employeeProfile').textContent=employeeQuery?'Choose one matching employee to view their route.':'Search an employee to see their Telegram details and outlet route.';
+ }
+ if(profile){
+   const first=journey[0],latest=journey[journey.length-1];
+   const routeState=raw.is_live?(latest?.activity_status==='Active'?'On route':'Checked in'):'Historical visits';
+   refreshEmployeeReasons(profile);const statusClass=routeState==='On route'?'route-live':'route-idle';
+   $('journeyTitle').textContent=`Employee Route · ${journey.length} stop${journey.length===1?'':'s'}`;
+   const target=(raw.plan_targets||[]).find(x=>String(x.employee_id)===String(profile.employee_id));
+   if(target?.total_outlets){const pct=journey.length/target.total_outlets*100;$('employeeProfile').insertAdjacentHTML('beforeend',`<div class="actual-plan-cards"><div class="actual-plan-card"><small>Total Outlet</small><strong>${Number(target.total_outlets).toLocaleString()}</strong><span>${Number(target.ws_ds||0)} WS/DS + ${Number(target.horeca||0)} HORECA</span></div><div class="actual-plan-card"><small>Actual Plan</small><strong>${journey.length} / ${Number(target.total_outlets).toLocaleString()}</strong><span>${pct.toFixed(2)}% outlet coverage</span></div></div>`)}else{$('employeeProfile').insertAdjacentHTML('beforeend','<div class="actual-plan-cards"><div class="actual-plan-card"><small>Total Outlet</small><strong>—</strong><span>Upload plan targets</span></div><div class="actual-plan-card"><small>Actual Plan</small><strong>—</strong><span>No outlet target available</span></div></div>')}
+   $('employeeProfile').insertAdjacentHTML('beforeend',`<div class="route-profile-extra"><span><small>First check-in</small><b>${esc(first?.pin_time||'—')}</b></span><span><small>Latest check-in</small><b>${esc(latest?.pin_time||'—')}</b></span><span class="${statusClass}"><small>Status</small><b>${esc(routeState)}</b></span></div>`);
+ }else{ employeeReasonRequest++;$('journeyTitle').textContent='Employee Route';$('employeeReasons').innerHTML='<h4>Summary Reason</h4><p>Select an employee to review written missed-report reasons.</p>'; }
+ $('journeys').innerHTML=journeyRows.map(({visit:x,index:i,distance,estimated})=>{
+   const from=i===0?`Dealer ${x.dealer||'—'}`:`Outlet ${i}`;
+   const plan=String(x.plan_check||'Not checked'),state=plan.toLowerCase(),planClass=state==='incorrect'?'incorrect':state==='correct'?'correct':'neutral';
+   return `<button class="route-stop" type="button" data-pin-id="${esc(x.pin_id)}" aria-label="Locate outlet ${i+1} on map"><div class="route-number">${i+1}</div><div class="route-stop-body"><div class="route-stop-title">${esc(from)} → Outlet ${i+1}</div><div class="route-stop-meta"><span>${esc(x.district||'District unavailable')}</span><span>${esc(x.commune||'Commune unavailable')}</span><span>Plan: ${esc(plannedFor(x))}</span></div></div><div class="route-stop-side"><span>${esc(x.pin_time||'—')}</span><span class="route-plan ${planClass}">${esc(plan)}</span><span>${distance==null?'—':(estimated?'≈ ':'')+Number(distance).toFixed(1)+' km'}</span><span class="route-map-hint">Show on map ↗</span></div></button>`
+ }).join('')||(profile?'<div class="empty">No check-ins for this employee on the selected date.</div>':'<div class="empty">Search or select an employee to view their outlet sequence.</div>');
+ $('rows').textContent=`${data.length.toLocaleString()} check-ins`;if(data.length&&bounds.length)map.fitBounds(bounds,{padding:[35,35],maxZoom:15});else if(visibleDealers.length===1)map.setView([visibleDealers[0].latitude,visibleDealers[0].longitude],12);else map.setView([12.5657,104.9910],7)}
+function setDashboardState(message,kind='info',retry=false){const el=$('dashboardStatus');el.className=`dashboard-status ${kind}`;el.replaceChildren(document.createTextNode(message));if(retry){const button=document.createElement('button');button.type='button';button.className='dashboard-retry';button.textContent='Retry';button.addEventListener('click',load);el.append(button)}el.hidden=!message}
+async function load(){const version=++loadVersion;clearTimeout(timer);$('lastTop').textContent='Refreshing…';setDashboardState('Loading check-ins for the selected date…','loading');try{const requested=$('date').value;const res=await fetch(`/api/v1/dashboard/snapshot?day=${encodeURIComponent(requested)}&_=${Date.now()}`,{cache:'no-store'});if(!res.ok)throw Error(await res.text());const result=await res.json();if(version!==loadVersion)return;raw=result;raw.routes=[];routeLoadKey='';routeRequestVersion++;if(raw.date!==requested){$('lastTop').textContent=`Date mismatch: requested ${requested}, received ${raw.date}`;setDashboardState('The server returned a different date. Retry to reload the selected day.','error',true);return}populate();render();applyDeepLink();$('mode').textContent=raw.is_live?'LIVE':'HISTORY';$('lastTop').textContent=raw.last_refresh?`${raw.date} · ${raw.data_source==='silver_warehouse'?'Warehouse history':'Live events'} · Last ${new Date(raw.last_refresh+'+07:00').toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:`No check-ins on ${raw.date}`;const w=raw.warehouse||{},ok=w.status==='Succeeded';$('dq').textContent=ok?'Healthy':(w.status||'Unavailable');$('dq').className=ok?'':w.status?'bad':'warn';$('wh').textContent=w.completed_at?new Date(w.completed_at+'+07:00').toLocaleString():'—';timer=setTimeout(load,(raw.refresh_seconds||300)*1000)}catch(e){if(version!==loadVersion)return;$('lastTop').textContent='Refresh failed — retrying';$('dq').textContent='API error';$('dq').className='bad';setDashboardState(raw?'Could not refresh. Showing the last loaded results.':'Could not load check-ins. Check your connection and retry.','error',true);timer=setTimeout(load,30000)}}
+let employeeReasonRequest=0; const reasonBackfills=new Set();
+async function refreshEmployeeReasons(profile){
+ const request=++employeeReasonRequest, node=$('employeeReasons');
+ node.innerHTML='<h4>Summary Reason </h4><p>Loading verified reasons…</p>';
+ const token=sessionStorage.getItem('so-dashboard-session-v1');
+ if(!token){node.innerHTML='<h4>Summary Reason</h4><p>Admin authentication is required.</p>';return}
+ try{
+  const params=new URLSearchParams({day:$('date').value});
+  if(profile.region)params.set('region',profile.region);
+  if(profile.dealer)params.set('dealer',profile.dealer);
+  const response=await fetch('/api/v1/admin/reasons?'+params,{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+  if(!response.ok)throw Error('Could not retrieve reasons ('+response.status+')');
+  const payload=await response.json();
+  if(request!==employeeReasonRequest)return;
+  const id=String(profile.employee_id||'').trim();
+  const uid=String(profile.telegram_id||'').trim();
+  const norm=v=>String(v||'').toLowerCase().replace(/[^a-z0-9\u1780-\u17ff]/g,'');
+  const matched=(payload.items||[]).filter(x=>
+    (id&&String(x.employee_id||'').trim()===id)||
+    (uid&&String(x.telegram_id||'').trim()===uid)||
+    (!x.employee_id&&!x.telegram_id&&norm(x.name)===norm(profile.real_name))
+  );
+  const verified=[...new Set(matched.filter(x=>x.is_reason===true&&x.summary).map(x=>String(x.summary).trim()))].slice(0,5);
+  const pending=matched.filter(x=>x.is_reason===null||x.is_reason===undefined);
+  const pendingUnique=[...new Map(pending.filter(x=>x.message).map(x=>[String(x.message).trim(),x])).values()].slice(0,5);
+  if(pendingUnique.length){
+    const jobKey=[$('date').value,id,uid].join(':');
+    if(!reasonBackfills.has(jobKey)){
+      reasonBackfills.add(jobKey);
+      const jobParams=new URLSearchParams({day:$('date').value});
+      if(profile.region)jobParams.set('region',profile.region);
+      if(profile.dealer)jobParams.set('dealer',profile.dealer);
+      if(id)jobParams.set('employee_id',id);
+      fetch('/api/v1/admin/reasons/reprocess?'+jobParams,{method:'POST',headers:{Authorization:'Bearer '+token}})
+       .then(async result=>{
+         if(!result.ok){const err=await result.json().catch(()=>({}));throw Error(err.detail||'Hermes unavailable')}
+         // Background task may take longer than a single page refresh.
+         setTimeout(()=>{if(request===employeeReasonRequest)refreshEmployeeReasons(profile)},12000);
+       })
+       .catch(error=>{if(request===employeeReasonRequest){const note=document.createElement('p');note.className='reason-status';note.textContent='Hermes status: '+error.message;node.append(note)}});
+    }
+  }
+  const items=verified.map(r=>'<li>'+esc(r)+'</li>').join('');
+  const underReview=pendingUnique.map(x=>'<li class="reason-pending"><span class="reason-status">Pending AI/review: </span>'+esc(String(x.message).trim())+'</li>').join('');
+  node.innerHTML='<h4>Summary Reason <small>'+verified.length+' verified · '+pendingUnique.length+' pending</small></h4>'+
+    (items?'<ol>'+items+'</ol>':'')+
+    (underReview?'<ol>'+underReview+'</ol>':'')+
+    (!items&&!underReview?'<p>No written explanation was linked to this employee for the selected date. Photos, forms, and GPS points are not counted as reasons.</p>':'');
+ }catch(error){if(request===employeeReasonRequest)node.innerHTML='<h4>Summary Reason</h4><p>'+esc(error.message)+'</p>'}
+}
+$('clearMapFilters').addEventListener('click',()=>{lastOpenOutletPin=null;map.closePopup();
+ for(const id of ids)$(id).value='';
+ hideEmployeeSuggestions();populate();render();
+ map.setView([12.5657,104.9910],7);
+ if(map.hasLayer(satellite)===false){for(const layer of [lightMap,street,terrain])map.removeLayer(layer);satellite.addTo(map)}
+});
+$('date').value=new Date(Date.now()+7*3600000).toISOString().slice(0,10);ids.forEach(id=>$(id).addEventListener('change',id==='date'?load:()=>filterChanged(id)));$('employee').addEventListener('input',()=>{renderEmployeeSuggestions();filterChanged('employee')});$('employee').addEventListener('focus',renderEmployeeSuggestions);$('employee').addEventListener('keydown',event=>{const box=$('employeeSuggestions'),first=box.querySelector('.employee-suggestion');if(event.key==='Escape')hideEmployeeSuggestions();else if(event.key==='ArrowDown'&&first){event.preventDefault();first.focus()}else if(event.key==='Enter'&&!box.hidden&&first){event.preventDefault();first.click()}});$('employeeSuggestions').addEventListener('keydown',event=>{const choices=[...$('employeeSuggestions').querySelectorAll('.employee-suggestion')],index=choices.indexOf(document.activeElement);if(event.key==='ArrowDown'&&choices.length){event.preventDefault();choices[Math.min(index+1,choices.length-1)].focus()}else if(event.key==='ArrowUp'){event.preventDefault();if(index<=0)$('employee').focus();else choices[index-1].focus()}else if(event.key==='Escape'){hideEmployeeSuggestions();$('employee').focus()}});$('employeeSuggestions').addEventListener('click',event=>{const choice=event.target.closest('.employee-suggestion');if(!choice)return;$('employee').value=choice.dataset.id;hideEmployeeSuggestions();filterChanged('employee')});document.addEventListener('click',event=>{if(!event.target.closest('.employee-filter'))hideEmployeeSuggestions()});
+function focusOutlet(pinId){const entry=markerByPin.get(String(pinId));if(!entry)return false;const {marker,cluster,visit}=entry;const reveal=()=>{map.flyTo([visit.latitude,visit.longitude],Math.max(map.getZoom(),16),{duration:.5});marker.openPopup()};if(cluster.hasLayer(marker)&&typeof cluster.zoomToShowLayer==='function')cluster.zoomToShowLayer(marker,reveal);else reveal();return true}
+$('journeys').addEventListener('click',event=>{const btn=event.target.closest('[data-pin-id]');if(btn)focusOutlet(btn.dataset.pinId)});
+const deepLink=new URLSearchParams(location.search);let initialDeepLink=true;
+function applyDeepLink(){if(!initialDeepLink||!raw)return;initialDeepLink=false;const id=deepLink.get('employee_id'),uid=deepLink.get('telegram_id'),region=deepLink.get('region'),dealer=deepLink.get('dealer');if(!id&&!uid)return;
+  if(region&&[...$('region').options].some(o=>o.value===region)){$('region').value=region;populate()}
+  if(dealer&&[...$('dealer').options].some(o=>o.value===dealer)){$('dealer').value=dealer;populate()}
+  $('employee').value=id||uid;render();
+  const selected=filtered().sort((a,b)=>Number(a.point_order)-Number(b.point_order));
+  if(selected.length){setTimeout(()=>focusOutlet(selected[0].pin_id),300)}
+  else{const dealerPoint=(raw.dealers||[]).find(d=>d.dealer===dealer&&(!region||d.region===region));if(dealerPoint)map.setView([dealerPoint.latitude,dealerPoint.longitude],12);$('employeeProfile').className='employee-profile empty-profile';$('employeeProfile').innerHTML=`<div class="route-absence">No check-in location is available for employee ${esc(id||uid)} on ${esc(raw.date)}. ${dealerPoint?'Map centered on the assigned dealer, not an employee outlet.':'No assigned dealer coordinates found.'}</div>`;$('journeys').innerHTML='<div class="empty">No outlet can be highlighted until a valid location check-in arrives.</div>'}
+}
+load();
+</script></body></html>
+
+
+
+
+
+
+
+

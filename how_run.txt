@@ -1,0 +1,38 @@
+Run manually
+.\RUN_WAREHOUSE.bat import-location
+.\RUN_WAREHOUSE.bat refresh
+.\RUN_WAREHOUSE.bat status
+
+Or run import plus full processing:
+
+.\RUN_WAREHOUSE.bat full
+
+| Setting        | Value                    |
+| -------------- | ------------------------ |
+| Data source    | PostgreSQL database      |
+| Server         | `localhost:5435`         |
+| Database       | `SA_Alert`               |
+| Authentication | Database                 |
+| Username       | `postgres`               |
+| Password       | Your PostgreSQL password |
+
+Server: 127.0.0.1:5435
+Database: SA_Alert
+Mode: DirectQuery
+
+
+cd D:\Bot\SO_Alert_Bot
+
+docker compose down
+docker compose up -d --build
+
+docker compose ps
+docker compose run --rm so-bot python -m app.warehouse_cli full
+
+docker compose restart so-bot
+docker compose logs --tail=100 -f so-bot
+
+
+.\RUN_NGROK_DASHBOARD.bat
+
+.\RUN_NGROK_DASHBOARD.bat

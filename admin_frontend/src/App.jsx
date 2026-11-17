@@ -1,0 +1,1282 @@
+import {restoreSession,sessionFetch} from "./dashboardSession.js";
+import ActualPlan from "./ActualPlan.jsx";
+import AdminLogin from "./EmailLogin.jsx";
+import ReasonSummaryPage from './ReasonSummaryPage.jsx';
+import DashboardErrorBoundary from './DashboardErrorBoundary.jsx';
+import GPReport from './GPReport.jsx';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  MapPin,
+  ChartBar,
+  Stack,
+  CalendarBlank,
+  Storefront,
+  Gear,
+  SquaresFour,
+  Bell,
+  UserCircle,
+  UsersThree,
+  WarningCircle,
+  CheckCircle,
+  Path,
+  Plus,
+  PencilSimple,
+  FloppyDisk,
+  UploadSimple,
+  TrendUp,
+  UserMinus,
+  MagnifyingGlass,
+} from "@phosphor-icons/react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  LineChart,
+  Line,
+  Legend,
+} from "recharts";
+
+const SESSION_KEY = "so-dashboard-session-v1";
+async function adminApi(path, options = {}) {
+  const token = sessionStorage.getItem(SESSION_KEY);
+  const headers = new Headers(options.headers || {});
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await sessionFetch(path, { ...options, headers });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    if (response.status === 401 && token) {
+      sessionStorage.removeItem(SESSION_KEY);
+      window.dispatchEvent(new Event("so-dashboard-session-expired"));
+      throw new Error("Your dashboard session expired. Sign in again.");
+    }
+    throw new Error(detail.detail || `Request failed (${response.status})`);
+  }
+  return response.status === 204 ? null : response.json();
+}
+
+
+const dealerGroups = {
+  R1: ["CA1", "CA2", "CA3", "CA4", "CA5", "CA6", "CA7", "CA8", "CA9", "PTM6"],
+  R2: [
+    "BTI6",
+    "CPH2",
+    "KDL1",
+    "KHT3",
+    "KRV5",
+    "KSV5",
+    "KTB1",
+    "PKB4",
+    "PMR5",
+    "SVA7",
+    "SVR4",
+    "TAK2",
+  ],
+  R3: [
+    "CUK7",
+    "KKG3",
+    "KPS7",
+    "KPT2",
+    "KSM1",
+    "KSP3",
+    "KTR4",
+    "PNP6",
+    "SRA5",
+    "TPG2",
+  ],
+  R4: ["BTB1", "BVL6", "KCG4", "KTL6", "MRS5", "PLN4", "PPT3", "PUS5", "VVG1"],
+  R5: ["BMC2", "CHK6", "KRG7", "KTH2", "KTM8", "PPR8", "PUK7", "SRP1"],
+  R6: ["BTY8", "KCM1", "MMT3", "STT4", "TKM2"],
+  R7: ["BKE7", "KRT1", "KSA5", "MDK2", "SNL6", "STR3", "RTK4"],
+  R8: ["CKS1", "AVG4", "PVH3", "SMR5"],
+};
+const dealers = Object.entries(dealerGroups).flatMap(([region, list]) =>
+  list.map((code) => ({ region, code })),
+);
+const nav = [
+  ["Live Map Check In", MapPin],
+  ["Performance", ChartBar],
+  ["Master Sale", Stack],
+  ["Plan Sale", CalendarBlank],
+  ["AL", UserMinus],
+  ["Reason Summary", WarningCircle],
+  ["Report GP", CalendarBlank],
+  ["Setting", Gear],
+];
+
+function cambodiaMapPosition(latitude, longitude) {
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) ||
+      lat < 9.8 || lat > 14.75 || lon < 102.3 || lon > 107.7) return null;
+  return {
+    left: `${((lon - 102.3) / (107.7 - 102.3) * 100).toFixed(2)}%`,
+    top: `${((14.75 - lat) / (14.75 - 9.8) * 100).toFixed(2)}%`,
+  };
+}
+
+function Header({ page, onLogout, onOpenAlert }) {
+  const [now, setNow] = useState(() => new Date());
+  const [firstCheckAlerts, setFirstCheckAlerts] = useState(null);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const notificationRef = useRef(null);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => adminApi("/api/v1/admin/first-check-alerts")
+      .then(result => { if (active) setFirstCheckAlerts(result); })
+      .catch(() => { if (active) setFirstCheckAlerts({ error: true, count: 0, items: [] }); });
+    refresh();
+    const timer = setInterval(refresh, 30000);
+    return () => { active = false; clearInterval(timer); };
+  }, []);
+  useEffect(() => {
+    if (!notificationOpen) return undefined;
+    const closeOnOutsideClick = event => {
+      if (!notificationRef.current?.contains(event.target)) setNotificationOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [notificationOpen]);
+  const timeLabel = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Phnom_Penh", weekday: "short", day: "2-digit", month: "short",
+    year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(now);
+  return (
+    <header className="header">
+      <div>
+        <h1>{page}</h1>
+        
+      </div>
+      <div className="header-tools">
+        <span className="time">
+          <b>●</b>Cambodia Time (ICT) · {timeLabel}
+        </span>
+        <input className="search" placeholder="Search SO, dealer, location…" />
+        <div className="notification-wrap" ref={notificationRef}>
+          <button className="icon-btn notification-button" aria-label={`${firstCheckAlerts?.count || 0} first-check alerts`}
+            aria-expanded={notificationOpen} onClick={() => setNotificationOpen(value => !value)}>
+            <Bell size={20} />
+            {firstCheckAlerts?.count > 0 && <span className="notification-count">{firstCheckAlerts.count > 99 ? "99+" : firstCheckAlerts.count}</span>}
+          </button>
+          {notificationOpen && <section className="notification-popover" role="dialog" aria-label="First check-in alerts">
+            <div className="notification-heading"><div><b>First check-in</b><small>Due by 9:00 AM ICT · {firstCheckAlerts?.date || "Today"}</small></div>
+              <span className={firstCheckAlerts?.count ? "notification-total is-alert" : "notification-total"}>{firstCheckAlerts?.count || 0}</span></div>
+            {firstCheckAlerts?.error ? <p className="notification-empty">Alerts could not be loaded. Try again shortly.</p> :
+              firstCheckAlerts?.deadline_passed === false ? <p className="notification-empty">Monitoring starts at 9:00 AM ICT.</p> :
+              firstCheckAlerts?.items?.length ? <div className="notification-list">{firstCheckAlerts.items.map(item => <button type="button" className="notification-item notification-action" key={`${item.employee_id}-${item.telegram_id || ""}`} onClick={() => { onOpenAlert(item); setNotificationOpen(false); }} aria-label={`Show ${item.real_name || item.employee_id} on live map`}>
+                <div className="notification-item-top"><b>{item.real_name || "Sales user"}</b><span className={item.alert_type === "late" ? "notification-kind is-late" : "notification-kind"}>{item.alert_type === "late" ? "Late" : "No check-in"}</span></div>
+                <small>{item.employee_id} · {item.region} / {item.dealer} · {item.telegram_group}</small>
+                <p>{item.alert_type === "late" ? `First check-in at ${item.first_check_time}` : "No first check-in by 9:00 AM"}<span className="notification-open-map">View on map ↗</span></p>
+              </button>)}</div> : <p className="notification-empty">All active sales have checked in by 9:00 AM.</p>}
+          </section>}
+        </div>
+        <button className="icon-btn">
+          <UserCircle size={23} />
+        </button>
+        <button className="secondary logout-button" onClick={onLogout}>Sign out</button>
+      </div>
+    </header>
+  );
+}
+function Sidebar({ page, setPage, apiHealth }) {
+  const healthLabel = apiHealth === "ready" ? "Dashboard ready" :
+    apiHealth === "checking" ? "Checking dashboard" : "Dashboard unavailable";
+  const databaseLabel = apiHealth === "ready" ? "PostgreSQL connected" :
+    apiHealth === "checking" ? "Checking database" : "Database/API connection failed";
+  return (
+    <aside className="sidebar">
+      <div className="brand">
+        <img src="/assets/cmfb-logo.png" />
+        <div>
+          <b>SO Alert Bot</b>
+          <small>Operations Center</small>
+        </div>
+      </div>
+      <div className="scope">
+        <b>Sales Execution</b>
+        <small>65 Dealer Groups • Cambodia</small>
+      </div>
+      <nav className="nav">
+        {nav.map(([name, Icon]) => (
+          <motion.button
+            whileHover={{ x: 3 }}
+            whileTap={{ scale: 0.98 }}
+            key={name}
+            className={page === name ? "active" : ""}
+            aria-label={name} title={name} aria-current={page === name ? "page" : undefined}
+            onClick={() => setPage(name)}
+          >
+            <Icon size={22} />
+            <span>
+              {name}
+              
+            </span>
+          </motion.button>
+        ))}
+      </nav>
+      <div className="system">
+        <b>
+          <i style={{ background: apiHealth === "ready" ? "#1bdba4" : apiHealth === "checking" ? "#ffd166" : "#f97078" }} />
+          {healthLabel}
+        </b>
+        
+      </div>
+    </aside>
+  );
+}
+function Metric({ name, value, delta }) {
+  return (
+    <motion.div className="metric" whileHover={{ y: -1 }}>
+      <div className="top">
+        <small>{name}</small>
+      </div>
+      <strong>{value}</strong>
+
+    </motion.div>
+  );
+}
+function RegionDealerFilters({ region, setRegion, dealer, setDealer }) {
+  const list =
+    region === "All Regions"
+      ? dealers
+      : dealers.filter((d) => d.region === region);
+  return (
+    <>
+      <label className="field">
+        <span>Region</span>
+        <select
+          value={region}
+          onChange={(e) => {
+            setRegion(e.target.value);
+            setDealer("All Dealers");
+          }}
+        >
+          <option>All Regions</option>
+          {Object.keys(dealerGroups).map((r) => (
+            <option key={r}>{r}</option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        <span>Dealer</span>
+        <select value={dealer} onChange={(e) => setDealer(e.target.value)}>
+          <option>All Dealers</option>
+          {Object.entries(dealerGroups).map(([r, codes]) => (
+            <optgroup label={r} key={r}>
+              {codes
+                .filter((c) => list.some((x) => x.code === c))
+                .map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+    </>
+  );
+}
+function LiveMap({ target }) {
+  const params = new URLSearchParams({embedded:"1"});
+  if (target?.employee_id) params.set("employee_id", String(target.employee_id));
+  if (target?.telegram_id) params.set("telegram_id", String(target.telegram_id));
+  if (target?.region) params.set("region", String(target.region));
+  if (target?.dealer) params.set("dealer", String(target.dealer));
+  if (target?.alert_type) params.set("alert", String(target.alert_type));
+  return (
+    <div className="live-map-shell">
+      <iframe
+        title="Live check-in map"
+        src={`/static/dashboard.html?${params}`}
+        loading="eager"
+      />
+    </div>
+  );
+}
+function Performance() {
+  const today = new Intl.DateTimeFormat("en-CA", {timeZone:"Asia/Phnom_Penh",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const [region, setRegion] = useState("All Regions"), [dealer, setDealer] = useState("All Dealers"), [tab, setTab] = useState("Region");
+  const [end, setEnd] = useState(today), [start, setStart] = useState(()=>{const d=new Date(`${today}T00:00:00Z`);d.setUTCDate(d.getUTCDate()-6);return d.toISOString().slice(0,10)});
+  const [report,setReport]=useState(null),[error,setError]=useState(""),[loading,setLoading]=useState(true);
+  useEffect(()=>{
+    let active=true;
+    const q=new URLSearchParams({start,end});
+    if(region!=="All Regions")q.set("region",region);
+    if(dealer!=="All Dealers")q.set("dealer",dealer);
+    setLoading(true);setError("");setReport(null);
+    adminApi(`/api/v1/admin/performance?${q}`)
+      .then(data=>{if(active)setReport(data)})
+      .catch(e=>{if(active){setReport(null);setError(e.message)}})
+      .finally(()=>{if(active)setLoading(false)});
+    return ()=>{active=false};
+  },[start,end,region,dealer]);
+  const summary=(report?.by_region||[]).filter(x=>region==="All Regions"||x.region===region);
+  const dealerRows=(report?.by_dealer||[]).filter(x=>(region==="All Regions"||x.region===region)&&(dealer==="All Dealers"||x.dealer===dealer));
+  const individualRows=(report?.individuals||[]).filter(x=>(region==="All Regions"||x.region===region)&&(dealer==="All Dealers"||x.dealer===dealer));
+  function exportRows(){const items=tab==="Region"?summary:tab==="Dealer"?dealerRows:individualRows;const csv=[Object.keys(items[0]||{}).join(","),...items.map(x=>Object.values(x).map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(","))].join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download=`SO_Performance_${tab}_${start}_${end}.csv`;a.click();URL.revokeObjectURL(a.href)}
+  return (
+    <>
+      <div className="panel controls">
+        <label className="field">
+          <span>From</span><input type="date" value={start} max={end} onChange={e=>setStart(e.target.value)} />
+        </label>
+        <label className="field"><span>To</span><input type="date" value={end} min={start} max={today} onChange={e=>setEnd(e.target.value)} /></label>
+        <RegionDealerFilters {...{ region, setRegion, dealer, setDealer }} />
+        <button className="secondary" onClick={exportRows} disabled={loading || !report}>Export CSV</button>
+      </div>
+      {error&&<p className="api-error" role="alert">{error}</p>}
+      <div className="metrics">
+        <Metric name="Total Check-ins" value={loading ? "Loading…" : report ? Number(report.totals?.checkins ?? 0).toLocaleString() : "—"} />
+        <Metric name="Districts Visited" value={loading ? "Loading…" : report ? Number(report.totals?.districts ?? 0).toLocaleString() : "—"} />
+        <Metric name="Communes Visited" value={loading ? "Loading…" : report ? Number(report.totals?.communes ?? 0).toLocaleString() : "—"} />
+        <Metric name="Over 10 km / AL" value={loading ? "Loading…" : report ? `${Number(report.totals?.over_10km ?? 0)} / ${Number(report.al_estimate ?? 0)}` : "—"} />
+      </div>
+      <div className="grid2">
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Total Check-in Performance</h2>
+              
+            </div>
+          </div>
+          <div className="chart-wrap">
+            {loading ? <div className="empty" role="status">Loading performance data…</div> : error ? <div className="empty">Performance data is unavailable.</div> :
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={summary}>
+                  <CartesianGrid strokeDasharray="4 4" vertical={false} />
+                  <XAxis dataKey="region" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="checkins" fill="#12aa8f" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>}
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Coverage & Exceptions</h2>
+              
+            </div>
+          </div>
+          <div className="chart-wrap">
+            {loading ? <div className="empty" role="status">Loading performance data…</div> : error ? <div className="empty">Performance data is unavailable.</div> :
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={summary.map((r) => ({r:r.region,district:r.districts,commune:r.communes,over:r.over_10km,active:r.active_sale}))}
+                >
+                  <CartesianGrid strokeDasharray="4 4" />
+                  <XAxis dataKey="r" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line dataKey="district" stroke="#1767c9" strokeWidth={3} />
+                  <Line dataKey="commune" stroke="#0caf84" strokeWidth={3} />
+                  <Line dataKey="over" stroke="#ef4454" strokeWidth={3} />
+                  <Line dataKey="active" stroke="#8b5cf6" strokeWidth={3} />
+                </LineChart>
+              </ResponsiveContainer>}
+          </div>
+        </div>
+      </div>
+      <div className="panel" style={{ marginTop: 16 }}>
+        <div className="panel-head">
+          <div>
+            <h2>Performance Drill-down</h2>
+            
+          </div>
+          <div className="tabs">
+            {["Region", "Dealer", "Individual Sale"].map((t) => (
+              <button
+                key={t}
+                className={tab === t ? "active" : ""}
+                onClick={() => setTab(t)}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="table-wrap" style={{ maxHeight: 420 }}>
+          {tab === "Region" ? (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Region</th>
+                  <th>Dealers</th>
+                  <th>Total Check-in</th>
+                  <th>District Visit</th>
+                  <th>Commune Visit</th>
+                  <th>Over 10 km</th>
+                  <th>AL</th>
+                  <th>Completion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.map((r) => (
+                  <tr key={r.region}>
+                    <td>
+                      <span className="region-tag">{r.region}</span>
+                    </td>
+                    <td>{dealerGroups[r.region]?.length||0}</td>
+                    <td>
+                      <b>{Number(r.checkins).toLocaleString()}</b>
+                    </td>
+                    <td>{r.districts}</td><td>{r.communes}</td><td>{r.over_10km}</td><td>{r.al_count}</td><td><span className="status">{r.roster_count ? `${Math.round(100*r.active_sale/r.roster_count)}%` : "—"}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : tab === "Dealer" ? (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Region</th>
+                  <th>Dealer</th>
+                  <th>Total Check-in</th>
+                  <th>District Visit</th>
+                  <th>Commune Visit</th>
+                  <th>Over 10 km</th>
+                  <th>AL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dealerRows.map((r) => (
+                    <tr key={`${r.region}-${r.dealer}`}>
+                      <td>{r.region}</td>
+                      <td>
+                        <span className="dealer-tag">{r.dealer}</span>
+                      </td>
+                      <td><b>{r.checkins}</b></td><td>{r.districts}</td><td>{r.communes}</td><td>{r.over_10km}</td><td>{r.al_count}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          ) : (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Employee ID</th>
+                  <th>Sale Name</th>
+                  <th>Region</th>
+                  <th>Dealer</th>
+                  <th>Check-ins</th>
+                  <th>District</th>
+                  <th>Commune</th>
+                  <th>Over 10 km</th>
+                  <th>Attendance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {individualRows.map((x) => (
+                  <tr key={`${x.employee_id}-${x.region}-${x.dealer}`}>
+                    <td>{x.employee_id}</td>
+                    <td>
+                      <b>{x.real_name}</b>
+                    </td>
+                    <td>{x.region}</td>
+                    <td>
+                      <span className="dealer-tag">{x.dealer}</span>
+                    </td>
+                    <td>{x.checkins}</td><td>{x.districts}</td><td>{x.communes}</td><td>{x.over_10km}</td><td>{x.attendance}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Master() {
+  const [data, setData] = useState([]),
+    [region, setRegion] = useState("All Regions"),
+    [dealer, setDealer] = useState("All Dealers"),
+    [statusMasterFilter, setStatusMasterFilter] = useState("All Status Master"),
+    [edit, setEdit] = useState(null), [search, setSearch] = useState(""), [error, setError] = useState("");
+  const [reportFrom, setReportFrom] = useState(""), [reportTo, setReportTo] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  async function uploadMaster(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError(""); setFeedback(""); setUploading(true);
+    try {
+      const payload = new FormData(); payload.append("file", file);
+      const result = await adminApi("/api/v1/admin/roster/upload", {method:"POST",body:payload});
+      const {items} = await adminApi("/api/v1/admin/roster");
+      setData(items.map(x=>({id:x.employee_id,name:x.real_name,telegram:x.telegram_id||"",username:x.username,region:x.region,dealer:x.dealer,role:x.position,active:x.active,source:x.source,statusMaster:x.status_master||"New Join",telegramGroup:x.telegram_group||"",reportedRegion:x.reported_region||"",reportedDealer:x.reported_dealer||"",lastReportAt:x.last_report_at||""})));
+      setFeedback(`Master Sale updated: ${result.rows} employees imported from ${result.filename}.`);
+    } catch(e) {setError(e.message)}
+    finally {setUploading(false);event.target.value=""}
+  }
+  async function deleteFromMaster(user) {
+    if (!window.confirm(`Delete ${user.name} (${user.id}) from Master Sale?\nThis disables their account and hides them from the master. Historical check-ins will be preserved.`)) return;
+    setError(""); setFeedback("");
+    try {
+      await adminApi(`/api/v1/admin/roster/${encodeURIComponent(user.id)}`, {method:"DELETE"});
+      setData(rows=>rows.filter(x=>x.id!==user.id));
+      setFeedback(`${user.name} removed from Master Sale; historical reports preserved.`);
+    } catch(e) {setError(e.message)}
+  }
+  useEffect(() => {
+    let active = true;
+    adminApi("/api/v1/admin/roster")
+      .then(({items})=>{if(active)setData(items.map(x=>({id:x.employee_id,name:x.real_name,telegram:x.telegram_id||"",username:x.username,region:x.region,dealer:x.dealer,role:x.position,active:x.active,source:x.source,statusMaster:x.status_master|| (x.source==="excel"?"In Master":"New Join"),telegramGroup:x.telegram_group||"",reportedRegion:x.reported_region||"",reportedDealer:x.reported_dealer||"",lastReportAt:x.last_report_at||""})))} )
+      .catch(e=>{if(active)setError(e.message)})
+      .finally(()=>{if(active)setLoading(false)});
+    return ()=>{active=false};
+  }, []);
+  async function useReportedGroup(user) {
+    if (!user.reportedRegion || !user.reportedDealer) return;
+    setError("");
+    try {
+      const payload={employee_id:user.id,telegram_id:user.telegram?Number(user.telegram):null,real_name:user.name,username:user.username||"",region:user.reportedRegion,dealer:user.reportedDealer,position:user.role,active:user.active};
+      const result=await adminApi(`/api/v1/admin/roster/${encodeURIComponent(user.id)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      setData(rows=>rows.map(x=>x.id===user.id?{...x,region:result.region,dealer:result.dealer}:x));
+    } catch(e) { setError(e.message); }
+  }
+  const filtered = data
+    .filter(
+      (u) =>
+        (region === "All Regions" || u.region === region) &&
+        (dealer === "All Dealers" || u.dealer === dealer) &&
+        (statusMasterFilter === "All Status Master" || u.statusMaster === statusMasterFilter) &&
+        (!reportFrom || (u.lastReportAt && String(u.lastReportAt).slice(0, 10) >= reportFrom)) &&
+        (!reportTo || (u.lastReportAt && String(u.lastReportAt).slice(0, 10) <= reportTo)) &&
+        (!search || `${u.id} ${u.name} ${u.telegram} ${u.telegramGroup}`.toLowerCase().includes(search.toLowerCase())),
+    )
+    .sort(
+      (a, b) =>
+        a.region.localeCompare(b.region) || a.dealer.localeCompare(b.dealer),
+    );
+  const activeSales=data.filter(u=>u.active&&["SO","SS"].includes(String(u.role||"").toUpperCase()));
+  const newJoinCount=activeSales.filter(u=>u.statusMaster==="New Join").length;
+  const masterCount=activeSales.filter(u=>u.statusMaster==="In Master").length;
+  return (
+    <>
+      <div className="section-title">
+        <div>
+          <h2>Sale Employee Master</h2>
+          
+        </div>
+        <div className="master-actions">
+        <label className="primary upload-button" aria-label="Upload Master Sale Excel">
+          <UploadSimple /> {uploading ? "Uploading…" : "Upload Master Sale"}
+          <input type="file" accept=".xlsx" disabled={uploading} onChange={uploadMaster} />
+        </label>
+        <button
+          className="primary"
+          onClick={() =>
+            setEdit({
+              id: "",
+              name: "",
+              telegram: "",
+              region: "R1",
+              dealer: "CA1",
+              role: "SO",
+              active: true,
+            })
+          }
+        >
+          <Plus /> Add Sale User
+        </button>
+        </div>
+      </div>
+      
+      {feedback && <p className="api-success" role="status">{feedback}</p>}
+      {error && <p className="api-error" role="alert">{error}</p>}
+      <div className="metrics master-metrics">
+        <Metric name="Total Sale" value={loading?"Loading…":activeSales.length.toLocaleString()} />
+        <Metric name="Total Sale New Join" value={loading?"Loading…":newJoinCount.toLocaleString()} />
+        <Metric name="Total Sale Master" value={loading?"Loading…":masterCount.toLocaleString()} />
+      </div>
+      <div className="panel controls master-controls">
+        <RegionDealerFilters {...{ region, setRegion, dealer, setDealer }} />
+        <label className="field grow">
+          <span>Search Employee</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Employee ID, name, Telegram ID…" />
+        </label>
+        <label className="field">
+          <span>Status Master</span>
+          <select value={statusMasterFilter} onChange={e=>setStatusMasterFilter(e.target.value)}>
+            <option>All Status Master</option>
+            <option>In Master</option>
+            <option>New Join</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Last report from</span>
+          <input type="date" value={reportFrom} max={reportTo || undefined} onChange={e=>setReportFrom(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Last report to</span>
+          <input type="date" value={reportTo} min={reportFrom || undefined} onChange={e=>setReportTo(e.target.value)} />
+        </label>
+      </div>
+      <div className="panel table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Employee ID</th>
+              <th>Real Name</th>
+              <th>Region</th>
+              <th>Dealer</th>
+              <th>Telegram Group</th>
+              <th>Telegram ID</th>
+              <th>Position</th>
+              <th>Status</th>
+              <th>Status Master</th>
+              <th>Last Report</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? <tr><td className="empty" colSpan={11}>Loading roster…</td></tr> : filtered.map((u) => (
+              <tr key={u.id}>
+                <td>
+                  <b>{u.id}</b>
+                </td>
+                <td>{u.name}</td>
+                <td>
+                  <span className="region-tag">{u.region}</span>
+                </td>
+                <td>
+                  <span className="dealer-tag">{u.dealer}</span>
+                </td>
+                <td>
+                  <span className="dealer-tag">{u.telegramGroup || "No report yet"}</span>
+                  {u.reportedRegion && u.reportedDealer &&
+                   (u.region !== u.reportedRegion || u.dealer !== u.reportedDealer) &&
+                    <button className="secondary compact" title="Assign this user to the latest valid report group" onClick={()=>useReportedGroup(u)}>Use reported group</button>}
+                </td>
+                <td>{u.telegram}</td>
+                <td>{u.role}</td>
+                <td>
+                  <span className={"status " + (!u.active ? "danger" : "")}>
+                    {u.active ? "Active" : "Disabled"}
+                  </span>
+                </td>
+                <td><span className={"master-status " + (u.statusMaster==="New Join"?"master-status-new":"master-status-in")}>{u.statusMaster}</span></td>
+                <td>{u.lastReportAt ? String(u.lastReportAt).slice(0, 10) : "—"}</td>
+                <td>
+                  <button
+                    className="icon-btn"
+                    onClick={() => setEdit({ ...u })}
+                  >
+                    <PencilSimple />
+                  </button>
+                  <button className="secondary compact" onClick={async()=>{
+                    try { const response=await adminApi(`/api/v1/admin/roster/${encodeURIComponent(u.id)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({employee_id:u.id,telegram_id:u.telegram?Number(u.telegram):null,real_name:u.name,username:u.username||"",region:u.region,dealer:u.dealer,position:u.role,active:!u.active})});
+                      setData(rows=>rows.map(x=>x.id===u.id?{...x,active:response.active}:x));
+                    } catch(e){setError(e.message)}
+                  }}>{u.active?"Disable":"Enable"}</button>
+                  <button className="secondary compact master-delete" title={`Remove ${u.name} from Master Sale`} onClick={()=>deleteFromMaster(u)}><UserMinus /> Delete</button>
+                </td>
+              </tr>
+            ))}
+            {!loading && !error && filtered.length === 0 && <tr><td className="empty" colSpan={11}>No employees match the current filters.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <AnimatePresence>
+        {edit && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "#071f4770",
+              zIndex: 50,
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            <motion.div
+              initial={{ y: 20, scale: 0.98 }}
+              animate={{ y: 0, scale: 1 }}
+              className="panel"
+              style={{ width: 620 }}
+            >
+              <div className="panel-head">
+                <div>
+                  <h2>{edit.id ? "Edit Sale User" : "Add Sale User"}</h2>
+                  
+                </div>
+                <button className="icon-btn" onClick={() => setEdit(null)}>
+                  ×
+                </button>
+              </div>
+              <div className="form-grid">
+                {[
+                  ["Employee ID", "id"],
+                  ["Real Name", "name"],
+                  ["Telegram ID", "telegram"],
+                ].map(([l, k]) => (
+                <label key={k} className="field">
+                    <span>{l}</span>
+                    <input
+                      value={edit[k]}
+                      onChange={(e) =>
+                        setEdit({ ...edit, [k]: e.target.value })
+                      }
+                    />
+                  </label>
+                ))}
+                <label className="field"><span>Status</span><select value={edit.active===false?"Disabled":"Active"} onChange={e=>setEdit({...edit,active:e.target.value==="Active"})}><option>Active</option><option>Disabled</option></select></label>
+                <label className="field">
+                  <span>Region</span>
+                  <select
+                    value={edit.region}
+                    onChange={(e) =>
+                      setEdit({
+                        ...edit,
+                        region: e.target.value,
+                        dealer: dealerGroups[e.target.value][0],
+                      })
+                    }
+                  >
+                    {Object.keys(dealerGroups).map((r) => (
+                      <option key={r}>{r}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Dealer</span>
+                  <select
+                    value={edit.dealer}
+                    onChange={(e) =>
+                      setEdit({ ...edit, dealer: e.target.value })
+                    }
+                  >
+                    {dealerGroups[edit.region].map((d) => (
+                      <option key={d}>{d}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Position</span>
+                  <select
+                    value={edit.role}
+                    onChange={(e) => setEdit({ ...edit, role: e.target.value })}
+                  >
+                    <option>SO</option>
+                    <option>SS</option>
+                    <option>SA</option>
+                    <option>SL</option>
+                  </select>
+                </label>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                  padding: "0 20px 20px",
+                }}
+              >
+                <button className="secondary" onClick={() => setEdit(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="primary"
+                  onClick={async () => {
+                    setError("");
+                    const payload={employee_id:edit.id.trim(),telegram_id:edit.telegram?Number(edit.telegram):null,real_name:edit.name.trim(),username:edit.username||"",region:edit.region,dealer:edit.dealer,position:edit.role,active:edit.active!==false};
+                    try {
+                      const response=await adminApi(edit.id?`/api/v1/admin/roster/${encodeURIComponent(edit.id)}`:"/api/v1/admin/roster",{method:edit.id?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+                      const saved={id:response.employee_id,name:response.real_name,telegram:response.telegram_id||"",username:response.username,region:response.region,dealer:response.dealer,role:response.position,active:response.active,source:response.source||edit.source||(edit.id?"excel":"dashboard"),statusMaster:response.status_master||edit.statusMaster||(response.source==="excel"?"In Master":"New Join"),telegramGroup:edit.telegramGroup||"",reportedRegion:edit.reportedRegion||"",reportedDealer:edit.reportedDealer||"",lastReportAt:edit.lastReportAt||""};
+                      setData(rows=>rows.some(x=>x.id===saved.id)?rows.map(x=>x.id===saved.id?saved:x):[saved,...rows]);setEdit(null);
+                    } catch(e){setError(e.message)}
+                  }}
+                >
+                  <FloppyDisk /> Save Changes
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+function Plan() {
+  const [view,setView]=useState('workbook');
+  return <div className="plan-page"><div className="plan-view-tabs" role="tablist" aria-label="Plan SO pages"><button role="tab" aria-selected={view==='workbook'} className={view==='workbook'?'selected':''} onClick={()=>setView('workbook')}>Plan workbook</button><button role="tab" aria-selected={view==='actual'} className={view==='actual'?'selected':''} onClick={()=>setView('actual')}>Actual Plan · All employees</button></div>{view==='actual'?<ActualPlan api={adminApi} RegionDealerFilters={RegionDealerFilters} Metric={Metric}/>:<PlanWorkbook/>}</div>
+}
+function PlanWorkbook() {
+  const [plan, setPlan] = useState({ latest: {}, items: [], dates: [], columns: [] });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [planDate,setPlanDate]=useState("All dates");
+  const [planRegion,setPlanRegion]=useState("All Regions");
+  const [planDealer,setPlanDealer]=useState("All Dealers");
+  const [planSearch,setPlanSearch]=useState("");
+  const [page,setPage]=useState(0);
+  const pageSize=100;
+  const refresh = () => adminApi("/api/v1/admin/plans").then(setPlan).catch(e=>setError(e.message));
+  useEffect(() => { refresh(); }, []);
+  async function upload(event) {
+    const file = event.target.files?.[0]; event.target.value = "";
+    if (!file) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const form = new FormData(); form.append("file", file);
+      const result = await adminApi("/api/v1/admin/plans/upload", { method: "POST", body: form });
+      setPlan(await adminApi("/api/v1/admin/plans"));
+      setPlanDate("All dates");setPlanRegion("All Regions");setPlanDealer("All Dealers");setPlanSearch("");setPage(0);
+      setNotice(`Plan uploaded: ${Number(result.latest?.commune_rows||0).toLocaleString()} commune rows and ${Number(result.rows).toLocaleString()} scheduled date cells.`);
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }
+  const itemRows = plan.items || [];
+  const dateOptions=plan.dates||[];
+  const corePlanColumns=[
+    {key:"region",label:"Region",type:"data"},
+    {key:"dealer",label:"Dealer",type:"data"},
+    {key:"employee id",label:"Employee ID",type:"data"},
+    {key:"sale name",label:"Sale Name",type:"data"},
+    {key:"district",label:"District",type:"data"},
+    {key:"com.code",label:"Com.Code",type:"data"},
+    {key:"commune",label:"Commune Name",type:"data"},
+    {key:"dis. from dealer",label:"Dis. From Dealer",type:"data"},
+  ];
+  const columns=corePlanColumns;
+  const getValue=(row,key)=>row.values?.[key]??"";
+  const isScheduledMark=mark=>!(["","0","no","off","-","al"].includes(String(mark??"").trim().toLowerCase()));
+  const regionOptions=[...new Set(itemRows.map(x=>getValue(x,"region")).filter(Boolean))].sort();
+  const dealerOptions=[...new Set(itemRows.filter(x=>planRegion==="All Regions"||getValue(x,"region")===planRegion).map(x=>getValue(x,"dealer")).filter(Boolean))].sort();
+  const normalizedSearch=planSearch.trim().toLowerCase();
+  const visibleRows=itemRows.filter(x=>(planRegion==="All Regions"||getValue(x,"region")===planRegion)
+    &&(planDealer==="All Dealers"||getValue(x,"dealer")===planDealer)
+    &&(planDate==="All dates"||isScheduledMark(x.schedule?.[planDate]))
+    &&(!normalizedSearch||corePlanColumns.map(column=>getValue(x,column.key)).join(" ").toLowerCase().includes(normalizedSearch)));
+  const pageCount=Math.max(1,Math.ceil(visibleRows.length/pageSize));
+  const currentPage=Math.min(page,pageCount-1);
+  const pageRows=visibleRows.slice(currentPage*pageSize,(currentPage+1)*pageSize);
+  const employeeCount = new Set(itemRows.map(x=>getValue(x,"employee id")).filter(Boolean)).size;
+  const dealerCount = new Set(itemRows.map(x=>`${getValue(x,"region")}-${getValue(x,"dealer")}`).filter(x=>!x.endsWith("-")&&!x.startsWith("-"))).size;
+  const districtCount = new Set(itemRows.map(x=>`${getValue(x,"region")}-${getValue(x,"dealer")}-${getValue(x,"district")}`).filter(x=>!x.endsWith("-")&&!x.includes("--"))).size;
+  const communeCount = new Set(itemRows.map(x=>getValue(x,"com.code")||`${getValue(x,"region")}-${getValue(x,"dealer")}-${getValue(x,"commune")}`).filter(x=>x&&!String(x).endsWith("-"))).size;
+  const scheduledCellCount=itemRows.reduce((sum,row)=>sum+dateOptions.reduce((count,day)=>{
+    return count+(isScheduledMark(row.schedule?.[day])?1:0);
+  },0),0);
+  const showingRows=visibleRows.length?`${(currentPage*pageSize+1).toLocaleString()}–${Math.min((currentPage+1)*pageSize,visibleRows.length).toLocaleString()}`:"0";
+  return (
+    <>
+      <div className="section-title">
+        <div>
+          <h2>Current Sale Plan</h2>
+          
+        </div>
+        <label className="primary upload-button"><UploadSimple /> {busy ? "Uploading and validating…" : "Upload Excel Plan"}<input type="file" accept=".xlsx" disabled={busy} onChange={upload} /></label>
+      </div>
+      {error && <p className="api-error" role="alert">{error}</p>}{notice && <p className="api-success">{notice}</p>}
+      <div className="metrics plan-metrics">
+        <Metric name="Sales IDs in Plan" value={employeeCount.toLocaleString()} />
+        <Metric name="Excel Commune Rows" value={itemRows.length.toLocaleString()} />
+        <Metric name="Unique Commune Codes" value={communeCount.toLocaleString()} />
+        <Metric name="Scheduled Date Cells" value={scheduledCellCount.toLocaleString()} />
+        <Metric name="District Groups" value={districtCount.toLocaleString()} />
+        <Metric name="Dealer Coverage" value={`${dealerCount} / 65`} />
+      </div>
+
+      <div className="panel plan-filter-tools">
+        <label className="field"><span>Scheduled visit date</span><select value={planDate} onChange={e=>{setPlanDate(e.target.value);setPage(0)}}><option>All dates</option>{dateOptions.map(day=><option key={day} value={day}>{day}</option>)}</select></label>
+        <label className="field"><span>Region</span><select value={planRegion} onChange={e=>{setPlanRegion(e.target.value);setPlanDealer("All Dealers");setPage(0)}}><option>All Regions</option>{regionOptions.map(value=><option key={value}>{value}</option>)}</select></label>
+        <label className="field"><span>Dealer</span><select value={planDealer} onChange={e=>{setPlanDealer(e.target.value);setPage(0)}}><option>All Dealers</option>{dealerOptions.map(value=><option key={value}>{value}</option>)}</select></label>
+        <label className="field plan-search"><span>Find a plan row</span><input value={planSearch} onChange={e=>{setPlanSearch(e.target.value);setPage(0)}} placeholder="Employee ID, name, district, commune…"/></label>
+      </div>
+      <div className="panel table-wrap plan-table-wrap" style={{ marginTop: 16 }}>
+        <div className="panel-head plan-table-head"><div><h2>Plan communes</h2></div></div>
+        <table className="data-table plan-wide-table">
+          <thead><tr>{columns.map(column=><th key={column.key} title={column.label}>{column.label}</th>)}</tr></thead>
+          <tbody>
+            {pageRows.map((r,i)=><tr key={`${r.source_sheet}-${r.source_row}-${i}`}>
+              {columns.map(column=>{
+                const value=getValue(r,column.key);
+                const distanceText=String(value??"").trim();
+                const display=column.key==="dis. from dealer"&&distanceText&&!/(?:km|kilomet(?:er|re)s?)\s*$/i.test(distanceText)?`${distanceText} km`:value;
+                return <td key={column.key}>{display}</td>;
+              })}
+            </tr>)}
+            {visibleRows.length===0&&<tr><td className="empty" colSpan={columns.length||1}>No plan rows match these filters.</td></tr>}
+          </tbody>
+        </table>
+        {visibleRows.length>0&&<div className="plan-pagination"><span>Page {currentPage+1} of {pageCount}</span><div><button className="secondary compact" disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}>Previous</button><button className="secondary compact" disabled={currentPage+1>=pageCount} onClick={()=>setPage(currentPage+1)}>Next</button></div></div>}
+        {itemRows.length===0&&<div className="empty">No active plan rows found. Upload a validated .xlsx plan to begin.</div>}
+      </div>
+    </>
+  );
+}
+function Locations() {
+  const [region, setRegion] = useState("All Regions"),
+    [dealer, setDealer] = useState("All Dealers"),
+    [selected, setSelected] = useState("CA2"), [locations,setLocations]=useState([]),
+    [latitude,setLatitude]=useState(""),[longitude,setLongitude]=useState(""),[locationError,setLocationError]=useState("");
+  useEffect(()=>{adminApi("/api/v1/admin/dealers").then(({items})=>setLocations(items.map(x=>({...dealers.find(d=>d.code===x.dealer),...x,code:x.dealer})).filter(x=>x.code))).catch(e=>setLocationError(e.message))},[]);
+  const current=locations.find(d=>d.code===selected);
+  useEffect(()=>{if(current){setLatitude(String(current.latitude??""));setLongitude(String(current.longitude??""))}},[selected,locations]);
+  const visible = locations.filter(
+    (d) =>
+      (region === "All Regions" || d.region === region) &&
+      (dealer === "All Dealers" || d.code === dealer),
+  );
+  return (
+    <>
+      <div className="panel controls">
+        <RegionDealerFilters {...{ region, setRegion, dealer, setDealer }} />
+        <span className="badge">65 Dealer Stations</span>
+      </div>
+      <div className="map-grid">
+        <div className="panel map">
+          <img src="/assets/cambodia-map.png" />
+          {visible.map((d) => {
+            const position = cambodiaMapPosition(d.latitude, d.longitude);
+            if (!position) return null;
+            return <button key={d.code} onClick={() => setSelected(d.code)}
+              className={"marker " + (selected === d.code ? "selected" : "")}
+              style={position} title={`${d.region}-${d.code} · ${d.origin_source || "location"}`}>
+              {d.code}
+            </button>;
+          })}
+          {visible.every((d) => !cambodiaMapPosition(d.latitude, d.longitude)) &&
+            <div className="empty" style={{ position: "absolute", inset: "40% 0 auto" }}>
+              {locationError || "No dealer coordinates are available for these filters."}
+            </div>}
+        </div>
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>{selected} Dealer Station</h2>
+              
+            </div>
+            <button className="icon-btn">
+              <PencilSimple />
+            </button>
+          </div>
+          <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
+            <label className="field">
+              <span>Dealer Name</span>
+              <input value={selected + " Dealer Station"} readOnly />
+            </label>
+            <label className="field">
+              <span>Latitude</span>
+              <input type="number" step="0.000001" min="9.8" max="14.75" value={latitude} onChange={e=>setLatitude(e.target.value)} />
+            </label>
+            <label className="field">
+              <span>Longitude</span>
+              <input type="number" step="0.000001" min="102.3" max="107.7" value={longitude} onChange={e=>setLongitude(e.target.value)} />
+            </label>
+            {locationError&&<p className="api-error">{locationError}</p>}
+            <button className="primary" disabled={!current} onClick={async()=>{setLocationError("");try{await adminApi(`/api/v1/admin/dealers/${current.region}-${selected}/origin`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({latitude:Number(latitude),longitude:Number(longitude)})});setLocations(rows=>rows.map(x=>x.code===selected?{...x,latitude:Number(latitude),longitude:Number(longitude),origin_source:"dashboard_override"}:x))}catch(e){setLocationError(e.message)}}}>
+              <FloppyDisk /> Save Location
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+function SettingsPage() {
+  const [s, setS] = useState(null);
+  const [settingsLoading,setSettingsLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState("");
+  const [tunnel,setTunnel]=useState({active:false,public_url:"",message:"Checking ngrok…"});
+  const refreshTunnel=()=>adminApi("/api/v1/admin/tunnel").then(setTunnel).catch(e=>setTunnel({active:false,public_url:"",message:e.message}));
+  useEffect(()=>{
+    let active=true;
+    adminApi("/api/v1/admin/settings")
+      .then(x=>{if(active)setS({...x.questions,automation_enabled:x.automation.enabled,alert_interval_minutes:x.alert_interval_minutes})})
+      .catch(e=>{if(active)setError(e.message)})
+      .finally(()=>{if(active)setSettingsLoading(false)});
+    refreshTunnel();
+    return ()=>{active=false};
+  },[]);
+  async function change(key,value){if(!s||saving)return;setError("");const before=s[key];setS(x=>({...x,[key]:value}));setSaving(true);try{const result=await adminApi("/api/v1/admin/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({[key]:value})});setS({...result.questions,automation_enabled:result.automation.enabled,alert_interval_minutes:result.alert_interval_minutes})}catch(e){setS(x=>({...x,[key]:before}));setError(e.message)}finally{setSaving(false)}}
+  return (
+    <div className="panel" style={{ padding: "4px 24px 24px" }}>
+      <div className="panel-head" style={{ paddingLeft: 0, paddingRight: 0 }}>
+        <div>
+          <h2>Alert Rules & Automation</h2>
+          
+        </div>
+      </div>
+      {error&&<p className="api-error" role="alert">{error}</p>}
+      {settingsLoading ? <div className="empty" role="status">Loading persisted settings…</div> : !s ? <div className="empty">Settings could not be loaded. Correct the API/database error before changing bot automation.</div> : <>
+      <div className="settings-row"><div><b>Alert check interval</b></div><select disabled={saving} value={s.alert_interval_minutes} onChange={e=>change("alert_interval_minutes",Number(e.target.value))}>{[5,10,15,20,25,30,35,40,45,50,55,60].map(v=><option key={v} value={v}>{v} minutes</option>)}</select></div>
+      {[
+        [
+          "wrong_plan",
+          "Wrong Plan Check-in",
+          "Ask when actual commune differs from the uploaded plan.",
+        ],
+        [
+          "over_10km",
+          "Road Distance Over 10 km",
+          "Alert dealer-to-first and check-in-to-check-in exceptions.",
+        ],
+        [
+          "missing_report_followup",
+          "Missing Report",
+          "Monitor completed reporting windows and notify controllers.",
+        ],
+        [
+          "reason_acknowledgement",
+          "Acknowledge user reasons",
+          "Send a confirmation after a user submits a follow-up reason.",
+        ],
+      ].map(([k, n, d]) => (
+        <div key={k} className="settings-row">
+          <div>
+            <b>{n}</b>
+            
+          </div>
+          <button
+            disabled={saving}
+            className={"toggle " + (s[k] ? "on" : "")}
+            onClick={() => change(k,!s[k])}
+          >
+            <span />
+          </button>
+        </div>
+      ))}
+      <div className="settings-row"><div><b>Automatic bot alerts</b></div><button disabled={saving} className={"toggle "+(s.automation_enabled?"on":"")} onClick={()=>change("automation_enabled",!s.automation_enabled)}><span/></button></div>
+      <div className="settings-row"><div><b>Public ngrok dashboard link</b></div><div style={{display:"flex",gap:10,alignItems:"center"}}>{tunnel.active&&<a className="secondary compact" href={tunnel.public_url} target="_blank" rel="noreferrer">Open public dashboard</a>}<button className="secondary compact" onClick={refreshTunnel}>Refresh link</button></div></div>
+      </>}
+    </div>
+  );
+}
+
+function ReasonSummary() {
+ return <ReasonSummaryPage api={adminApi} RegionDealerFilters={RegionDealerFilters} Metric={Metric}/>;
+}
+
+function ALPage() {
+  const [region, setRegion] = useState("All Regions");
+  const [dealer, setDealer] = useState("All Dealers");
+  const initialDay=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Phnom_Penh",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const [date, setDate] = useState(initialDay);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [attendanceSearch,setAttendanceSearch]=useState("");
+  const [status, setStatus] = useState("All Status");
+  const [rows, setRows] = useState([]); const [error,setError]=useState("");
+  const [loading,setLoading]=useState(true);
+  const [selectedEmployees,setSelectedEmployees]=useState([]);
+  const [rangeFrom,setRangeFrom]=useState(initialDay);
+  const [rangeTo,setRangeTo]=useState(initialDay);
+  const [rangeAttendance,setRangeAttendance]=useState("AL Range");
+  const [savingRange,setSavingRange]=useState(false);
+  const [success,setSuccess]=useState("");
+  const [rangeReportRows,setRangeReportRows]=useState([]);
+  const [rangeReportPeriod,setRangeReportPeriod]=useState(null);
+  const [rangeReportLoaded,setRangeReportLoaded]=useState(false);
+  const [rangeReportLoading,setRangeReportLoading]=useState(false);
+  async function loadRows(){
+    const q=new URLSearchParams({day:date});if(region!=="All Regions")q.set("region",region);if(dealer!=="All Dealers")q.set("dealer",dealer);
+    setLoading(true);setError("");
+    try{const {items}=await adminApi(`/api/v1/admin/al?${q}`);setRows(items.map(x=>({id:x.employee_id,name:x.real_name,region:x.region,dealer:x.dealer,role:x.position,attendance:x.attendance,leaveStatus:x.leave_status||"",hasCheckin:x.has_checkin,fullDayConflict:x.full_day_conflict,telegramGroup:x.telegram_group,source:x.source})));}
+    catch(e){setRows([]);setError(e.message)}
+    finally{setLoading(false)}
+  }
+  useEffect(()=>{loadRows()},[date,region,dealer]);
+  useEffect(()=>{setRangeReportLoaded(false)},[region,dealer]);
+  useEffect(()=>{setSelectedEmployees([])},[region,dealer]);
+  const attendanceFiltered = rows.filter(r =>
+    (region === "All Regions" || r.region === region) &&
+    (dealer === "All Dealers" || r.dealer === dealer) &&
+    (status === "All Status" || r.attendance === status || r.leaveStatus === status) &&
+    [r.id,r.name,r.telegramGroup,r.region,r.dealer].join(" ").toLowerCase().includes(attendanceSearch.trim().toLowerCase())
+  ).sort((a,b)=>a.region.localeCompare(b.region)||a.dealer.localeCompare(b.dealer)||a.name.localeCompare(b.name));
+  const employeeChoices=rows.filter(r=>(region==="All Regions"||r.region===region)&&(dealer==="All Dealers"||r.dealer===dealer)
+    &&[r.id,r.name,r.telegramGroup,r.region,r.dealer].join(" ").toLowerCase().includes(employeeSearch.trim().toLowerCase()))
+    .sort((a,b)=>a.region.localeCompare(b.region)||a.dealer.localeCompare(b.dealer)||a.name.localeCompare(b.name));
+  const setAttendance=async(id,value)=>{setError("");setSuccess("");try{await adminApi(`/api/v1/admin/al/${encodeURIComponent(id)}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({day:date,attendance:value})});await loadRows()}catch(e){setError(e.message)}};
+  const toggleEmployee=(id,checked)=>setSelectedEmployees(current=>checked?[...new Set([...current,id])]:current.filter(value=>value!==id));
+  const applyRange=async()=>{
+    setError("");setSuccess("");
+    if(!selectedEmployees.length){setError("Select at least one employee first.");return;}
+    const days=(Date.parse(`${rangeTo}T00:00:00Z`)-Date.parse(`${rangeFrom}T00:00:00Z`))/86400000+1;
+    if(!Number.isFinite(days)||days<1||days>90){setError("Choose an ordered date range of 1 to 90 days.");return;}
+    setSavingRange(true);
+    try{
+      const attendance=rangeAttendance==="AL Range"?"AL Full Day":rangeAttendance;
+      const result=await adminApi("/api/v1/admin/al/range",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({start:rangeFrom,end:rangeTo,employee_ids:selectedEmployees,attendance})});
+      setSuccess(`${rangeAttendance==="AL Range"?"AL Range (full day)":result.attendance} saved for ${result.employee_ids.length} employee(s), ${result.days} day(s).`);
+      setSelectedEmployees([]);await Promise.all([loadRows(),loadRangeReport()]);
+    }catch(e){setError(e.message)}
+    finally{setSavingRange(false)}
+  };
+  const loadRangeReport=async()=>{
+    setError("");
+    const days=(Date.parse(`${rangeTo}T00:00:00Z`)-Date.parse(`${rangeFrom}T00:00:00Z`))/86400000+1;
+    if(!Number.isFinite(days)||days<1||days>90){setError("Choose an ordered date range of 1 to 90 days.");return;}
+    const q=new URLSearchParams({start:rangeFrom,end:rangeTo});
+    if(region!=="All Regions")q.set("region",region);
+    if(dealer!=="All Dealers")q.set("dealer",dealer);
+    setRangeReportLoading(true);setRangeReportLoaded(false);
+    try{
+      const result=await adminApi(`/api/v1/admin/al/range?${q}`);
+      setRangeReportRows(result.items||[]);setRangeReportPeriod({start:result.from_date,end:result.to_date});setRangeReportLoaded(true);
+    }catch(e){setError(e.message)}
+    finally{setRangeReportLoading(false)}
+  };
+  const alCount=attendanceFiltered.filter(r=>Boolean(r.leaveStatus)).length;
+  return <div className="al-page">
+    <div className="section-title al-page-title"><div><h2>Attendance & Annual Leave</h2></div><button className="secondary al-print-button" onClick={()=>window.print()}>Export / Print</button></div>
+    {error&&<p className="api-error" role="alert">{error}</p>}
+    <div className="al-subsection-heading"><div><h3>Review attendance for one day</h3></div></div>
+    <div className="panel controls al-filter-card">
+      <label className="field"><span>Date</span><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>
+      <RegionDealerFilters {...{region,setRegion,dealer,setDealer}} />
+      <label className="field al-attendance-search"><span>Search Employee</span><input value={attendanceSearch} onChange={e=>setAttendanceSearch(e.target.value)} placeholder="Employee ID, name or Telegram group…"/></label>
+      <label className="field"><span>Status</span><select value={status} onChange={e=>setStatus(e.target.value)}><option>All Status</option><option>AL Full Day</option><option>AL Morning</option><option>AL Afternoon</option><option>Present</option><option>Scheduled</option><option>Not Reported</option></select></label>
+    </div>
+    <section className="panel al-schedule al-schedule-stable" aria-label="Schedule annual leave"><div className="al-schedule-title"><h3>Schedule annual leave</h3></div>
+    <section className="al-range-card">
+      <div className="al-range-heading"><div><h3>Schedule leave for employees</h3></div><span className="al-range-limit">1–90 days</span></div>
+      <div className="al-step-label"><span>1</span><div><b>Choose dates and leave type</b></div></div>
+      <div className="al-range-controls">
+        <label className="field"><span>From date</span><input type="date" value={rangeFrom} onChange={e=>{setRangeFrom(e.target.value);setRangeReportLoaded(false)}}/></label>
+        <label className="field"><span>To date</span><input type="date" value={rangeTo} onChange={e=>{setRangeTo(e.target.value);setRangeReportLoaded(false)}}/></label>
+        <label className="field"><span>Leave type</span><select value={rangeAttendance} onChange={e=>setRangeAttendance(e.target.value)}><option value="AL Range">AL Range (full day)</option><option value="AL Morning">AL Morning</option><option value="AL Afternoon">AL Afternoon</option></select></label>
+        <button className="secondary al-view-button" disabled={rangeReportLoading||savingRange} onClick={loadRangeReport}>{rangeReportLoading?"Loading saved leave…":"View saved leave"}</button>
+      </div>
+      <div className="al-step-label"><span>2</span><div><b>Find and select employees</b></div></div>
+      <div className="al-employee-toolbar"><label className="field al-find-employee"><span>Search Employee</span><input value={employeeSearch} onChange={e=>setEmployeeSearch(e.target.value)} placeholder="Employee ID, name, Telegram Group, Region, Dealer…"/></label><div className="al-selection-tools"><span className="al-selected-count" aria-live="polite">{selectedEmployees.length>0?`${selectedEmployees.length} selected`:"No employees selected"}</span><button type="button" className="secondary al-clear-button" disabled={!selectedEmployees.length||savingRange} onClick={()=>setSelectedEmployees([])}>Clear all selected</button></div></div>
+      <div className="panel table-wrap al-selector-wrap">
+        <table className="data-table"><thead><tr>
+          <th>Select</th>
+          <th>Employee ID</th><th>Name</th><th>Telegram Group</th><th>Region</th><th>Dealer</th>
+        </tr></thead><tbody>
+          {loading?<tr><td className="empty" colSpan={6}>Loading employees…</td></tr>:employeeChoices.map(r=><tr key={`range-${r.id}`}>
+            <td><input type="checkbox" aria-label={'Select '+r.name+' for AL range'} checked={selectedEmployees.includes(r.id)} onChange={e=>toggleEmployee(r.id,e.target.checked)}/></td>
+            <td>{r.id}</td><td>{r.name}</td><td>{r.telegramGroup}</td><td><span className="region-tag">{r.region}</span></td><td><span className="dealer-tag">{r.dealer}</span></td>
+          </tr>)}
+          {!loading&&!employeeChoices.length&&<tr><td className="empty" colSpan={6}>No employees match this search and region/dealer selection.</td></tr>}
+        </tbody></table>
+      </div>
+      <div className="al-range-footer">
+        <div className="al-apply-summary"><span className="al-step-number">3</span><span><b>Apply leave</b><small>{selectedEmployees.length?`${selectedEmployees.length} employee${selectedEmployees.length===1?"":"s"} · ${rangeFrom} to ${rangeTo}`:"Select at least one employee above"}</small></span></div>
+        <button className="primary al-apply-button" disabled={savingRange||loading||!selectedEmployees.length} onClick={applyRange}>{savingRange?"Saving…":rangeAttendance==="AL Range"?"Apply AL Range":"Apply AL"}</button>
+      </div>
+    </section></section>
+    {success&&<p className="al-success" role="status">{success}</p>}
+    {(rangeReportLoaded||rangeReportLoading)&&<div className="panel table-wrap al-report-card">
+      <div className="panel-head"><div><h2>Saved leave</h2></div></div>
+      <table className="data-table"><thead><tr><th>Employee ID</th><th>Name</th><th>Telegram Group</th><th>Region</th><th>Dealer</th><th>AL Type</th><th>From Date</th><th>To Date</th><th>Days</th><th>Source</th></tr></thead><tbody>
+        {rangeReportLoading?<tr><td className="empty" colSpan={10}>Loading AL range…</td></tr>:rangeReportRows.map((r,index)=><tr key={`${r.employee_id}-${r.from_date}-${r.to_date}-${r.source}-${index}`}><td>{r.employee_id}</td><td>{r.real_name}</td><td>{r.telegram_group}</td><td>{r.region}</td><td>{r.dealer}</td><td><span className="status danger">{r.leave_type}</span></td><td>{r.from_date}</td><td>{r.to_date}</td><td>{r.days}</td><td>{r.source}</td></tr>)}
+        {!rangeReportLoading&&rangeReportRows.length===0&&<tr><td className="empty" colSpan={10}>No saved AL records found for this date range.</td></tr>}
+      </tbody></table>
+    </div>}
+    <div className="metrics al-metrics">
+      <Metric name="Master Sales" value={loading?"Loading…":error?"—":attendanceFiltered.length} />
+      <Metric name="Present / Active" value={loading?"Loading…":error?"—":attendanceFiltered.filter(r=>r.hasCheckin&&!r.fullDayConflict).length} />
+      <Metric name="Annual Leave (AL)" value={loading?"Loading…":error?"—":alCount} />
+      <Metric name="Not Reported" value={loading?"Loading…":error?"—":attendanceFiltered.filter(r=>r.attendance==="Not Reported").length} />
+    </div>
+    <div className="al-subsection-heading al-attendance-list-title"><div><h3>Employee attendance</h3></div></div>
+    <div className="panel table-wrap" style={{marginTop:16}}><table className="data-table"><thead><tr><th>Region</th><th>Dealer</th><th>Telegram Group</th><th>Employee ID</th><th>Name</th><th>Position</th><th>Attendance</th><th>Check-in</th><th>Evidence / source</th><th>Set bot leave</th></tr></thead><tbody>
+      {loading ? <tr><td className="empty" colSpan={10}>Loading attendance…</td></tr> : attendanceFiltered.map(r=><tr key={r.id}><td><span className="region-tag">{r.region}</span></td><td><span className="dealer-tag">{r.dealer}</span></td><td>{r.telegramGroup||`${r.region}-${r.dealer}`}</td><td>{r.id}</td><td>{r.name}</td><td>{r.role}</td><td><span className={'status '+(r.leaveStatus?'danger':'')+(r.fullDayConflict?' status-conflict':'')}>{r.fullDayConflict?'AL Full Day · Check-in conflict':r.attendance}</span></td><td>{r.hasCheckin?"Yes":"No"}</td><td>{r.source}</td><td><select aria-label={'Set bot leave for '+r.name} value={r.leaveStatus||"Clear dashboard AL"} onChange={e=>setAttendance(r.id,e.target.value)}><option>Clear dashboard AL</option><option>AL Full Day</option><option>AL Morning</option><option>AL Afternoon</option></select></td></tr>)}
+    </tbody></table>{!loading&&!error&&attendanceFiltered.length===0&&<div className="empty">No matching employees.</div>}</div>
+    
+  </div>;
+}
+
+export default function App() {
+  const [page, setPage] = useState("Live Map Check In");
+  const [mapTarget, setMapTarget] = useState(null);
+  const [signedIn, setSignedIn] = useState(Boolean(sessionStorage.getItem(SESSION_KEY)));
+  const [authChecked, setAuthChecked] = useState(false);
+  const [account, setAccount] = useState(null);
+  const [apiHealth, setApiHealth] = useState("checking");
+  useEffect(() => {
+    let active = true;
+    const checkHealth = async () => {
+      try {
+        const response = await fetch("/health", { cache: "no-store" });
+        const result = response.ok ? await response.json() : null;
+        if (active) setApiHealth(result?.status === "ready" && result?.database ? "ready" : "unavailable");
+      } catch {
+        if (active) setApiHealth("unavailable");
+      }
+    };
+    checkHealth();
+    const timer = setInterval(checkHealth, 30000);
+    return () => { active = false; clearInterval(timer); };
+  }, []);
+  useEffect(() => {
+    const handleExpiredSession = () => {
+      setSignedIn(false);
+      setAuthChecked(true);
+    };
+    window.addEventListener("so-dashboard-session-expired", handleExpiredSession);
+    return () => window.removeEventListener("so-dashboard-session-expired", handleExpiredSession);
+  }, []);
+  useEffect(() => {
+    const check=sessionStorage.getItem(SESSION_KEY)?adminApi("/api/v1/auth/me"):restoreSession();
+    check.then(user => {setAccount(user);setSignedIn(true)}).catch(() => {
+      sessionStorage.removeItem(SESSION_KEY); setSignedIn(false);
+    }).finally(() => setAuthChecked(true));
+  }, []);
+  if (!authChecked) return <main className="login-screen"><div className="panel login-card">Checking dashboard session…</div></main>;
+  if (!signedIn) return <AdminLogin onLogin={user => {setAccount(user);setSignedIn(true)}} />;
+  const content =
+    page === "Live Map Check In" ? (
+      <LiveMap target={mapTarget} />
+    ) : page === "Performance" ? (
+      <Performance />
+    ) : page === "Master Sale" ? (
+      <Master />
+    ) : page === "Plan Sale" ? (
+      <Plan />
+    ) : page === "AL" ? (
+      <ALPage />
+    ) : page === "Report GP" ? (
+      <GPReport api={adminApi} />
+    ) : page === "Reason Summary" ? (
+      <ReasonSummary />
+    ) : (
+      <SettingsPage />
+    );
+  return (
+    <div className="app">
+      <Sidebar {...{ page, setPage, apiHealth }} />
+      <main className="main">
+        <Header page={page} onOpenAlert={item=>{setMapTarget({...item, nonce:Date.now()});setPage("Live Map Check In");}} onLogout={async()=>{try{await adminApi('/api/v1/auth/logout',{method:'POST'});sessionStorage.removeItem(SESSION_KEY);setAccount(null);setSignedIn(false)}catch(error){window.alert(error.message)}}} />
+        <div className="content">
+          
+          <AnimatePresence mode="wait">
+            <motion.div
+              className={`workspace-page page-${page.toLowerCase().replaceAll(' ', '-')}`}
+              key={`${page}:${page === "Live Map Check In" ? mapTarget?.nonce || 0 : 0}`}
+              initial={{ opacity: 0, y: 7 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.2 }}
+            >
+              <DashboardErrorBoundary resetKey={page}>{content}</DashboardErrorBoundary>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+

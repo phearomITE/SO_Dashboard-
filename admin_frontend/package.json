@@ -1,0 +1,15 @@
+{
+  "name": "so-alert-admin-react-preview",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "vite build" },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.7",
+    "framer-motion": "^12.23.24",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.4.1"
+  },
+  "devDependencies": { "@vitejs/plugin-react": "^5.1.1", "vite": "^7.2.2" }
+}

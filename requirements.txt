@@ -1,0 +1,14 @@
+python-telegram-bot[job-queue,socks]==21.6
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.10
+python-dotenv==1.0.1
+openpyxl==3.1.5
+Pillow>=10,<12
+shapely>=2,<3
+tzdata>=2024.2
+pandas==2.2.3
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+redis==5.2.1
+Telethon==1.44.0
