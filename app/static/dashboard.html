@@ -345,13 +345,11 @@ let employeeReasonRequest=0; const reasonBackfills=new Set();
 async function refreshEmployeeReasons(profile){
  const request=++employeeReasonRequest, node=$('employeeReasons');
  node.innerHTML='<h4>Summary Reason </h4><p>Loading verified reasons…</p>';
- const token=sessionStorage.getItem('so-dashboard-session-v1');
- if(!token){node.innerHTML='<h4>Summary Reason</h4><p>Admin authentication is required.</p>';return}
  try{
   const params=new URLSearchParams({day:$('date').value});
   if(profile.region)params.set('region',profile.region);
   if(profile.dealer)params.set('dealer',profile.dealer);
-  const response=await fetch('/api/v1/admin/reasons?'+params,{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+  const response=await fetch('/api/v1/admin/reasons?'+params,{cache:'no-store'});
   if(!response.ok)throw Error('Could not retrieve reasons ('+response.status+')');
   const payload=await response.json();
   if(request!==employeeReasonRequest)return;

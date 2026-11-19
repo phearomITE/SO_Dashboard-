@@ -1,6 +1,5 @@
-import {restoreSession,sessionFetch} from "./dashboardSession.js";
+import { sessionFetch } from "./dashboardSession.js";
 import ActualPlan from "./ActualPlan.jsx";
-import AdminLogin from "./EmailLogin.jsx";
 import ReasonSummaryPage from './ReasonSummaryPage.jsx';
 import DashboardErrorBoundary from './DashboardErrorBoundary.jsx';
 import GPReport from './GPReport.jsx';
@@ -41,19 +40,10 @@ import {
   Legend,
 } from "recharts";
 
-const SESSION_KEY = "so-dashboard-session-v1";
 async function adminApi(path, options = {}) {
-  const token = sessionStorage.getItem(SESSION_KEY);
-  const headers = new Headers(options.headers || {});
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  const response = await sessionFetch(path, { ...options, headers });
+  const response = await sessionFetch(path, options);
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
-    if (response.status === 401 && token) {
-      sessionStorage.removeItem(SESSION_KEY);
-      window.dispatchEvent(new Event("so-dashboard-session-expired"));
-      throw new Error("Your dashboard session expired. Sign in again.");
-    }
     throw new Error(detail.detail || `Request failed (${response.status})`);
   }
   return response.status === 204 ? null : response.json();
@@ -119,7 +109,7 @@ function cambodiaMapPosition(latitude, longitude) {
   };
 }
 
-function Header({ page, onLogout, onOpenAlert }) {
+function Header({ page, onOpenAlert }) {
   const [now, setNow] = useState(() => new Date());
   const [firstCheckAlerts, setFirstCheckAlerts] = useState(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -181,7 +171,6 @@ function Header({ page, onLogout, onOpenAlert }) {
         <button className="icon-btn">
           <UserCircle size={23} />
         </button>
-        <button className="secondary logout-button" onClick={onLogout}>Sign out</button>
       </div>
     </header>
   );
@@ -1201,9 +1190,6 @@ function ALPage() {
 export default function App() {
   const [page, setPage] = useState("Live Map Check In");
   const [mapTarget, setMapTarget] = useState(null);
-  const [signedIn, setSignedIn] = useState(Boolean(sessionStorage.getItem(SESSION_KEY)));
-  const [authChecked, setAuthChecked] = useState(false);
-  const [account, setAccount] = useState(null);
   const [apiHealth, setApiHealth] = useState("checking");
   useEffect(() => {
     let active = true;
@@ -1220,22 +1206,6 @@ export default function App() {
     const timer = setInterval(checkHealth, 30000);
     return () => { active = false; clearInterval(timer); };
   }, []);
-  useEffect(() => {
-    const handleExpiredSession = () => {
-      setSignedIn(false);
-      setAuthChecked(true);
-    };
-    window.addEventListener("so-dashboard-session-expired", handleExpiredSession);
-    return () => window.removeEventListener("so-dashboard-session-expired", handleExpiredSession);
-  }, []);
-  useEffect(() => {
-    const check=sessionStorage.getItem(SESSION_KEY)?adminApi("/api/v1/auth/me"):restoreSession();
-    check.then(user => {setAccount(user);setSignedIn(true)}).catch(() => {
-      sessionStorage.removeItem(SESSION_KEY); setSignedIn(false);
-    }).finally(() => setAuthChecked(true));
-  }, []);
-  if (!authChecked) return <main className="login-screen"><div className="panel login-card">Checking dashboard session…</div></main>;
-  if (!signedIn) return <AdminLogin onLogin={user => {setAccount(user);setSignedIn(true)}} />;
   const content =
     page === "Live Map Check In" ? (
       <LiveMap target={mapTarget} />
@@ -1258,7 +1228,7 @@ export default function App() {
     <div className="app">
       <Sidebar {...{ page, setPage, apiHealth }} />
       <main className="main">
-        <Header page={page} onOpenAlert={item=>{setMapTarget({...item, nonce:Date.now()});setPage("Live Map Check In");}} onLogout={async()=>{try{await adminApi('/api/v1/auth/logout',{method:'POST'});sessionStorage.removeItem(SESSION_KEY);setAccount(null);setSignedIn(false)}catch(error){window.alert(error.message)}}} />
+        <Header page={page} onOpenAlert={item=>{setMapTarget({...item, nonce:Date.now()});setPage("Live Map Check In");}} />
         <div className="content">
           
           <AnimatePresence mode="wait">

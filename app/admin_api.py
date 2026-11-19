@@ -40,9 +40,10 @@ _PLAN_GRID_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def current_admin(request: Request) -> str:
-    from app.email_auth import identity
-    user = getattr(request.state, 'dashboard_user', None) or identity(request)
-    return user['email']
+    user = getattr(request.state, "dashboard_user", None)
+    if isinstance(user, dict) and user.get("email"):
+        return user["email"]
+    return os.getenv("DASHBOARD_ADMIN_NAME", "SO Operations Admin").strip() or "SO Operations Admin"
 
 
 def _redis(request: Request):

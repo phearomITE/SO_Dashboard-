@@ -197,9 +197,6 @@ async def lifespan(_app):
 app = FastAPI(title="SO Alert Live Check-In Dashboard", version="1.0.0", lifespan=lifespan,
               docs_url="/api/docs", redoc_url=None)
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
-from app.email_auth import router as email_auth_router, DashboardAuthMiddleware
-app.add_middleware(DashboardAuthMiddleware)
-app.include_router(email_auth_router)
 app.include_router(admin_router)
 from app.gp_reports import router as gp_router
 app.include_router(gp_router)

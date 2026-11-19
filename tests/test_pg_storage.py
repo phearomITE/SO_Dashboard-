@@ -258,3 +258,16 @@ def test_render_smtp_blocked_message(monkeypatch):
                 assert 'EMAIL_WEBHOOK_URL' in exc.detail
     finally:
         engine.dispose()
+
+
+def test_current_admin_works_without_signin(monkeypatch):
+    from pathlib import Path
+    admin_src = (Path(__file__).resolve().parents[1] / 'app' / 'admin_api.py').read_text(encoding='utf-8')
+    fn_block = admin_src.split('def current_admin(request: Request) -> str:', 1)[1].split('\n\ndef ', 1)[0]
+    assert 'identity(' not in fn_block
+    assert 'DASHBOARD_ADMIN_NAME' in fn_block
+    if importlib.util.find_spec('python_multipart') is not None:
+        from app import admin_api
+        monkeypatch.setenv('DASHBOARD_ADMIN_NAME', 'SO Operations Admin')
+        req = SimpleNamespace(state=SimpleNamespace())
+        assert admin_api.current_admin(req) == 'SO Operations Admin'
