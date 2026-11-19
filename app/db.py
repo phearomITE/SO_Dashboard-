@@ -237,9 +237,14 @@ lock_connection=None
 
 def now(): return datetime.now(TZ).replace(tzinfo=None)
 def _normalize_database_url(raw):
+    import re, urllib.parse
     value=(raw or '').strip()
-    if value.startswith('postgres://'):return 'postgresql+psycopg2://'+value[len('postgres://'):]
-    if value.startswith('postgresql://'):return 'postgresql+psycopg2://'+value[len('postgresql://'):]
+    if value.startswith('postgres://'):value = 'postgresql+psycopg2://'+value[len('postgres://'):]
+    elif value.startswith('postgresql://'):value = 'postgresql+psycopg2://'+value[len('postgresql://'):]
+    m = re.match(r'^(.*?://)(.*?):(.*)@([^@]+)$', value)
+    if m:
+        scheme, user, pwd, host_part = m.groups()
+        value = scheme + user + ':' + urllib.parse.quote(urllib.parse.unquote(pwd), safe='') + '@' + host_part
     return value
 
 def database_url():
