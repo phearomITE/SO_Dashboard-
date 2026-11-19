@@ -109,7 +109,7 @@ function cambodiaMapPosition(latitude, longitude) {
   };
 }
 
-function Header({ page, onOpenAlert }) {
+function Header({ page, apiHealth, onOpenAlert }) {
   const [now, setNow] = useState(() => new Date());
   const [firstCheckAlerts, setFirstCheckAlerts] = useState(null);
   const [notificationOpen, setNotificationOpen] = useState(false);
@@ -141,9 +141,10 @@ function Header({ page, onOpenAlert }) {
   }).format(now);
   return (
     <header className="header">
-      <div>
-        <h1>{page}</h1>
-        
+      <div className="sa-breadcrumb" aria-label="Breadcrumb">
+        <span className="sa-crumb-root">Workspace</span>
+        <span className="sa-crumb-sep" aria-hidden="true">›</span>
+        <strong className="sa-crumb-current">{page}</strong>
       </div>
       <div className="header-tools">
         <span className="time">
@@ -153,7 +154,7 @@ function Header({ page, onOpenAlert }) {
         <div className="notification-wrap" ref={notificationRef}>
           <button className="icon-btn notification-button" aria-label={`${firstCheckAlerts?.count || 0} first-check alerts`}
             aria-expanded={notificationOpen} onClick={() => setNotificationOpen(value => !value)}>
-            <Bell size={20} />
+            <Bell size={18} />
             {firstCheckAlerts?.count > 0 && <span className="notification-count">{firstCheckAlerts.count > 99 ? "99+" : firstCheckAlerts.count}</span>}
           </button>
           {notificationOpen && <section className="notification-popover" role="dialog" aria-label="First check-in alerts">
@@ -168,55 +169,69 @@ function Header({ page, onOpenAlert }) {
               </button>)}</div> : <p className="notification-empty">All active sales have checked in by 9:00 AM.</p>}
           </section>}
         </div>
-        <button className="icon-btn">
-          <UserCircle size={23} />
-        </button>
+        <span className={`sa-conn-pill ${apiHealth !== "ready" ? "is-warn" : ""}`}>
+          <i aria-hidden="true" />
+          {apiHealth === "ready" ? "Bot online" : apiHealth === "checking" ? "Checking…" : "Unavailable"}
+        </span>
       </div>
     </header>
   );
 }
 function Sidebar({ page, setPage, apiHealth }) {
-  const healthLabel = apiHealth === "ready" ? "Dashboard ready" :
-    apiHealth === "checking" ? "Checking dashboard" : "Dashboard unavailable";
   const databaseLabel = apiHealth === "ready" ? "PostgreSQL connected" :
-    apiHealth === "checking" ? "Checking database" : "Database/API connection failed";
+    apiHealth === "checking" ? "Checking database" : "Database/API error";
+  const workspaceItems = nav.filter(([name]) => name !== "Setting");
+  const managementItems = nav.filter(([name]) => name === "Setting");
   return (
     <aside className="sidebar">
-      <div className="brand">
-        <img src="/assets/cmfb-logo.png" />
+      <div className="sa-brand-logo">
+        <img src="/assets/cmfb-logo.png" alt="Chip Mong FoodBev" />
+      </div>
+      <div className="sa-workspace-card">
+        <span className="sa-workspace-icon"><SquaresFour size={18} weight="duotone" /></span>
         <div>
           <b>SO Alert Bot</b>
-          <small>Operations Center</small>
+          <small>Operations workspace</small>
         </div>
       </div>
-      <div className="scope">
-        <b>Sales Execution</b>
-        <small>65 Dealer Groups • Cambodia</small>
-      </div>
-      <nav className="nav">
-        {nav.map(([name, Icon]) => (
+      <nav className="nav" aria-label="Workspace navigation">
+        <h2 className="sa-nav-group">WORKSPACE</h2>
+        {workspaceItems.map(([name, Icon]) => (
           <motion.button
-            whileHover={{ x: 3 }}
-            whileTap={{ scale: 0.98 }}
+            whileHover={{ x: 2 }}
+            whileTap={{ scale: 0.99 }}
             key={name}
             className={page === name ? "active" : ""}
             aria-label={name} title={name} aria-current={page === name ? "page" : undefined}
             onClick={() => setPage(name)}
           >
-            <Icon size={22} />
-            <span>
-              {name}
-              
-            </span>
+            <Icon size={18} />
+            <span>{name}</span>
+            {page === name && <i className="sa-nav-dot" aria-hidden="true" />}
+          </motion.button>
+        ))}
+        <h2 className="sa-nav-group sa-nav-group-spaced">MANAGEMENT</h2>
+        {managementItems.map(([name, Icon]) => (
+          <motion.button
+            whileHover={{ x: 2 }}
+            whileTap={{ scale: 0.99 }}
+            key={name}
+            className={page === name ? "active" : ""}
+            aria-label={name} title={name} aria-current={page === name ? "page" : undefined}
+            onClick={() => setPage(name)}
+          >
+            <Icon size={18} />
+            <span>{name}</span>
+            {page === name && <i className="sa-nav-dot" aria-hidden="true" />}
           </motion.button>
         ))}
       </nav>
-      <div className="system">
-        <b>
-          <i style={{ background: apiHealth === "ready" ? "#1bdba4" : apiHealth === "checking" ? "#ffd166" : "#f97078" }} />
-          {healthLabel}
-        </b>
-        
+      <div className="sa-side-footer">
+        <span className="sa-side-avatar">SO</span>
+        <div>
+          <b>Operations Center</b>
+          <small>{databaseLabel}</small>
+        </div>
       </div>
     </aside>
   );
@@ -343,7 +358,7 @@ function Performance() {
                   <XAxis dataKey="region" />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="checkins" fill="#12aa8f" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="checkins" fill="#0353a4" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>}
           </div>
@@ -366,10 +381,10 @@ function Performance() {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Line dataKey="district" stroke="#1767c9" strokeWidth={3} />
-                  <Line dataKey="commune" stroke="#0caf84" strokeWidth={3} />
-                  <Line dataKey="over" stroke="#ef4454" strokeWidth={3} />
-                  <Line dataKey="active" stroke="#8b5cf6" strokeWidth={3} />
+                  <Line dataKey="district" stroke="#0353a4" strokeWidth={3} />
+                  <Line dataKey="commune" stroke="#16796c" strokeWidth={3} />
+                  <Line dataKey="over" stroke="#d96b43" strokeWidth={3} />
+                  <Line dataKey="active" stroke="#6366f1" strokeWidth={3} />
                 </LineChart>
               </ResponsiveContainer>}
           </div>
@@ -687,7 +702,8 @@ function Master() {
             style={{
               position: "fixed",
               inset: 0,
-              background: "#071f4770",
+              background: "rgba(17, 45, 35, 0.35)",
+              backdropFilter: "blur(3px)",
               zIndex: 50,
               display: "grid",
               placeItems: "center",
@@ -1228,7 +1244,7 @@ export default function App() {
     <div className="app">
       <Sidebar {...{ page, setPage, apiHealth }} />
       <main className="main">
-        <Header page={page} onOpenAlert={item=>{setMapTarget({...item, nonce:Date.now()});setPage("Live Map Check In");}} />
+        <Header page={page} apiHealth={apiHealth} onOpenAlert={item=>{setMapTarget({...item, nonce:Date.now()});setPage("Live Map Check In");}} />
         <div className="content">
           
           <AnimatePresence mode="wait">

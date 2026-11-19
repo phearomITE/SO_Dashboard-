@@ -1,0 +1,225 @@
+/* Dashboard SA visual alignment for the embedded Live Map view. */
+:root {
+  --font-sans: "DM Sans", "Kantumruy Pro", "Noto Sans Khmer", system-ui, sans-serif;
+}
+
+html.embedded body {
+  font-family: var(--font-sans) !important;
+  font-size: 13px;
+  color: #192d2b;
+  background: #f7f9f8;
+}
+
+html.embedded .filters {
+  background: #ffffff;
+  border: 1px solid #dfe7e4;
+  border-radius: 14px;
+  box-shadow: 0 2px 4px rgba(23, 47, 38, 0.025);
+  padding: 10px 12px;
+}
+
+html.embedded .filter label {
+  font-size: 10px;
+  font-weight: 650;
+  color: #53645f;
+}
+
+html.embedded .filter input,
+html.embedded .filter select {
+  height: 32px;
+  min-height: 32px;
+  border: 1px solid #d8e2dc;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: #192d2b;
+  background: #ffffff;
+}
+
+html.embedded .filter input:focus,
+html.embedded .filter select:focus {
+  border-color: #16796c;
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(88, 172, 159, 0.22);
+}
+
+html.embedded .filters button {
+  height: 32px;
+  min-height: 32px;
+  border: 1px solid #d8e2dc;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #404f48;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+html.embedded .filters button:hover {
+  background: #f0f5f2;
+  border-color: #bfcec6;
+}
+
+html.embedded .dashboard-status {
+  background: #f0f7f2;
+  border: 1px solid #dcebdd;
+  border-radius: 10px;
+  color: #387358;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+html.embedded .card,
+html.embedded .kpi,
+html.embedded .coverage .metric {
+  background: #ffffff;
+  border: 1px solid #dfe7e4;
+  border-radius: 11px;
+  box-shadow: 0 2px 4px rgba(23, 47, 38, 0.02);
+}
+
+html.embedded .kpi {
+  height: 50px;
+  min-height: 50px;
+  padding: 6px 9px;
+}
+
+html.embedded .coverage .metric {
+  height: 50px;
+  min-height: 50px;
+  padding: 6px 9px;
+}
+
+html.embedded .ico {
+  background: #e5f3eb;
+  color: #22785a;
+}
+
+html.embedded .ico.orange {
+  background: #fbefdf;
+  color: #9c672b;
+}
+
+html.embedded .kpi .label,
+html.embedded .coverage .metric > span {
+  color: #56675f;
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+html.embedded .kpi .value,
+html.embedded .coverage .metric b {
+  color: #156454;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+html.embedded .coverage .actual {
+  color: #16796c;
+}
+
+html.embedded .mapwrap,
+html.embedded .journey-panel {
+  border: 1px solid #dfe7e4;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(23, 47, 38, 0.025);
+}
+
+html.embedded .journey-panel h3 {
+  color: #172e28;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.35px;
+  border-bottom: 1px solid #edf1ed;
+}
+
+html.embedded .employee-profile,
+html.embedded .employee-reasons {
+  background: #fbfcfb;
+  border: 1px solid #dfe7e4;
+  border-radius: 11px;
+}
+
+html.embedded .profile-avatar {
+  background: linear-gradient(145deg, #156454, #16796c);
+}
+
+html.embedded .profile-copy b {
+  color: #172e28;
+}
+
+html.embedded .profile-tags span {
+  background: #e5f3eb;
+  color: #176855;
+}
+
+html.embedded .profile-link {
+  color: #156454;
+  border-color: #d8e2dc;
+}
+
+.route-number {
+  background: #e5f3eb;
+  color: #176855;
+}
+
+.route-stop:hover .route-number {
+  background: #156454;
+  color: #ffffff;
+}
+
+.route-stop:not(:last-child):before {
+  background: #dfe7e4;
+}
+
+.route-stop-title {
+  color: #172e28;
+}
+
+.route-plan.correct {
+  background: #e5f3eb;
+  color: #22785a;
+}
+
+.route-plan.incorrect {
+  background: #fff3ee;
+  color: #973e35;
+}
+
+.route-plan.neutral {
+  background: #eff2ef;
+  color: #667369;
+}
+
+.employee-suggestions {
+  border: 1px solid #dfe7e4;
+  border-radius: 11px;
+  box-shadow: 0 12px 32px rgba(23, 47, 38, 0.14);
+}
+
+.employee-suggestion {
+  color: #192d2b;
+}
+
+.employee-suggestion:hover,
+.employee-suggestion:focus {
+  background: #f0f5f2;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  font-family: var(--font-sans);
+  color: #192d2b;
+}
+
+.outlet-detail__header h3,
+.popup h3 {
+  color: #156454;
+}
+
+.outlet-detail__evidence a,
+.popup a {
+  background: #e5f3eb !important;
+  color: #156454 !important;
+}

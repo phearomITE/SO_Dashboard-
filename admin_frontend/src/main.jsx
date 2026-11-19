@@ -5,6 +5,7 @@ import DashboardErrorBoundary from './DashboardErrorBoundary.jsx'
 import './styles.css'
 import './compact.css'
 import './responsive.css'
-createRoot(document.getElementById('root')).render(<React.StrictMode><DashboardErrorBoundary><App/></DashboardErrorBoundary></React.StrictMode>)
-
 import './gp-report.css'
+import './sa-theme.css'
+
+createRoot(document.getElementById('root')).render(<React.StrictMode><DashboardErrorBoundary><App/></DashboardErrorBoundary></React.StrictMode>)
