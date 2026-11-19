@@ -236,15 +236,29 @@ Session=None
 lock_connection=None
 
 def now(): return datetime.now(TZ).replace(tzinfo=None)
+_ALREADY_ENCODED=None
 def _normalize_database_url(raw):
     import re, urllib.parse
+    global _ALREADY_ENCODED
+    if _ALREADY_ENCODED is None:_ALREADY_ENCODED=re.compile(r'^(?:[A-Za-z0-9._~-]|%[0-9A-Fa-f]{2})*$')
     value=(raw or '').strip()
     if value.startswith('postgres://'):value = 'postgresql+psycopg2://'+value[len('postgres://'):]
     elif value.startswith('postgresql://'):value = 'postgresql+psycopg2://'+value[len('postgresql://'):]
-    m = re.match(r'^(.*?://)(.*?):(.*)@([^@]+)$', value)
+    m = re.match(r'^(.*?://)([^:@/?#]+):(.*)@([^@]+)$', value)
+    host = ''
     if m:
         scheme, user, pwd, host_part = m.groups()
-        value = scheme + user + ':' + urllib.parse.quote(urllib.parse.unquote(pwd), safe='') + '@' + host_part
+        if not _ALREADY_ENCODED.match(pwd):
+            pwd = urllib.parse.quote(pwd, safe='')
+        value = scheme + user + ':' + pwd + '@' + host_part
+        host = host_part.split('/', 1)[0].split('?', 1)[0].split(':', 1)[0].strip().lower()
+    elif '://' in value:
+        after = value.split('://', 1)[1].split('@')[-1]
+        host = after.split('/', 1)[0].split('?', 1)[0].split(':', 1)[0].strip().lower()
+    if value.startswith('postgresql') and host not in {'', 'localhost', '127.0.0.1', 'postgres', 'host.docker.internal'}:
+        query = value.split('?', 1)[1] if '?' in value else ''
+        if 'sslmode=' not in query.lower():
+            value += ('&' if '?' in value else '?') + 'sslmode=require'
     return value
 
 def database_url():
@@ -254,12 +268,14 @@ def database_url():
 def new_engine(url=None):
     from sqlalchemy.engine import make_url
     target=make_url(_normalize_database_url(url) if isinstance(url,str) else (url or database_url()))
+    external=bool((os.getenv('DATABASE_URL') or '').strip())
+    if url is None and external and os.getenv('DATABASE_PASSWORD'):
+        target=target.set(password=os.getenv('DATABASE_PASSWORD'))
     options={'connect_timeout':max(3,int(os.getenv('DB_CONNECT_TIMEOUT','10')))} if target.get_backend_name()=='postgresql' else {}
     pool_options={}
     if target.get_backend_name()=='postgresql':
-        external=bool((os.getenv('DATABASE_URL') or '').strip())
-        pool_size=int(os.getenv('DB_POOL_SIZE','5' if external else '20'))
-        max_overflow=int(os.getenv('DB_MAX_OVERFLOW','10' if external else '40'))
+        pool_size=int(os.getenv('DB_POOL_SIZE','3' if external else '20'))
+        max_overflow=int(os.getenv('DB_MAX_OVERFLOW','3' if external else '40'))
         pool_options={'pool_size':pool_size,'max_overflow':max_overflow,'pool_timeout':30,'pool_recycle':1800}
     return create_engine(target,pool_pre_ping=True,connect_args=options,**pool_options)
 
@@ -293,16 +309,20 @@ def probe_connection():
 def connect(url=None):
     global engine,Session
     candidate=new_engine(url)
-    try:Base.metadata.create_all(candidate)
+    try:
+        if candidate.dialect.name=='postgresql':
+            with candidate.begin() as connection:
+                connection.execute(text('SELECT pg_advisory_xact_lock(835501520)'))
+                Base.metadata.create_all(connection)
+                connection.execute(text('ALTER TABLE silver_so_visit_v1 ADD COLUMN IF NOT EXISTS wrong_plan_reason TEXT'))
+                connection.execute(text('ALTER TABLE silver_so_visit_v1 ADD COLUMN IF NOT EXISTS over_10km_reason TEXT'))
+                install_gold_views(connection)
+        else:
+            Base.metadata.create_all(candidate)
     except Exception:
         candidate.dispose();raise
-    if candidate.dialect.name=='postgresql':
-        with candidate.begin() as connection:
-            connection.execute(text('ALTER TABLE silver_so_visit_v1 ADD COLUMN IF NOT EXISTS wrong_plan_reason TEXT'))
-            connection.execute(text('ALTER TABLE silver_so_visit_v1 ADD COLUMN IF NOT EXISTS over_10km_reason TEXT'))
     engine=candidate
     Session=sessionmaker(engine,expire_on_commit=False)
-    install_gold_views()
 
 def purge_test_data(s,extra_chat_ids=None):
     """Permanently remove Test_SO/R9 activity before production processing.
@@ -730,11 +750,16 @@ AND v.chat_id<>-1004303041907 AND lower(trim(v.group_name))<>'test_so'
            ) AS r(one_table,one_column,many_table,many_column)'''
     ]
 
-def install_gold_views():
+def install_gold_views(connection=None):
     """Install a relationship-ready Power BI star schema on PostgreSQL."""
-    if engine.dialect.name!='postgresql':return
-    with engine.begin() as connection:
+    if connection is not None:
+        if connection.dialect.name!='postgresql':return
         for sql in gold_view_statements():connection.execute(text(sql))
+        return
+    if engine is None or engine.dialect.name!='postgresql':return
+    with engine.begin() as conn:
+        conn.execute(text('SELECT pg_advisory_xact_lock(835501520)'))
+        for sql in gold_view_statements():conn.execute(text(sql))
 
 def acquire_lock():
     global lock_connection

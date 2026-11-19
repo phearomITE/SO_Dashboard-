@@ -15,15 +15,19 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
+import gc
 import logging
 import json
 import mimetypes
+import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from app import db
 from app.config import TOKEN
+from app.diagnostics import database_message
+import app.geo as geo_module
 from app.geo import locate
 from app.admin_api import router as admin_router
 
@@ -134,9 +138,15 @@ def load_dealers(path=DEALERS):
 
 @asynccontextmanager
 async def lifespan(_app):
-    # The bot remains schema owner; the dashboard creates only its own audit table.
-    db.engine = db.new_engine()
-    db.Session = sessionmaker(db.engine, expire_on_commit=False)
+    for attempt in range(1, 4):
+        try:
+            db.connect()
+            break
+        except Exception as exc:
+            logging.getLogger(__name__).error("%s (attempt %s/3)", database_message(exc, db.database_url()), attempt)
+            if attempt == 3:
+                raise
+            time.sleep(2)
     with db.engine.begin() as connection:
         connection.execute(text("""CREATE TABLE IF NOT EXISTS dashboard_audit_v1 (
             id BIGSERIAL PRIMARY KEY,
@@ -173,6 +183,10 @@ async def lifespan(_app):
         logging.getLogger(__name__).info("Dashboard dealer map cache ready (%s stations)", station_count)
     except Exception:
         logging.getLogger(__name__).exception("Dashboard dealer map cache warm-up failed")
+    finally:
+        if os.getenv("DATABASE_URL", "").strip() or os.getenv("RENDER"):
+            geo_module._cache = None
+            gc.collect()
     yield
     if getattr(_app.state, "redis", None) is not None:
         _app.state.redis.close()

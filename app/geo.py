@@ -127,6 +127,7 @@ def load_boundaries():
                     # the whole bot fail at startup/export time.
                     if not geom.is_valid:geom=make_valid(geom)
                     if not geom.is_empty:out.append((geom,props))
+            root.clear()
     _cache=(fingerprint,out);return out
 
 def locate(lat,lon):

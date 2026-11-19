@@ -5,16 +5,51 @@ from unittest.mock import patch
 
 from fastapi import HTTPException, Response
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app import db, email_auth as auth
 from app.auth_store import AuthStore, PgAuthCache
+from app.diagnostics import database_message
 
 
 def test_normalize_database_url():
-    assert db._normalize_database_url('postgres://user:pass@host:5432/db') == 'postgresql+psycopg2://user:pass@host:5432/db'
-    assert db._normalize_database_url('postgresql://user:pass@host:5432/db?sslmode=require') == 'postgresql+psycopg2://user:pass@host:5432/db?sslmode=require'
+    assert db._normalize_database_url('postgres://user:pass@localhost:5432/db') == 'postgresql+psycopg2://user:pass@localhost:5432/db'
+    assert db._normalize_database_url('postgresql://user:pass@127.0.0.1:5432/db') == 'postgresql+psycopg2://user:pass@127.0.0.1:5432/db'
+    assert db._normalize_database_url(
+        'postgresql://postgres.ref:SoAlert2026@Pass!@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres'
+    ) == 'postgresql+psycopg2://postgres.ref:SoAlert2026%40Pass%21@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=require'
+    assert db._normalize_database_url(
+        'postgresql://postgres.ref:Sodashbaord2026%2005!@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres'
+    ) == 'postgresql+psycopg2://postgres.ref:Sodashbaord2026%252005%21@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=require'
+    assert db._normalize_database_url(
+        'postgresql://postgres.ref:SoAlert2026%40Pass%21@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres'
+    ) == 'postgresql+psycopg2://postgres.ref:SoAlert2026%40Pass%21@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=require'
+    assert db._normalize_database_url(
+        'postgresql://postgres.ref:secret@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=verify-full'
+    ) == 'postgresql+psycopg2://postgres.ref:secret@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=verify-full'
+
+
+def test_new_engine_database_password_and_cloud_pool(monkeypatch):
+    monkeypatch.setenv('DATABASE_URL', 'postgresql://postgres.ref:placeholder@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres')
+    monkeypatch.setenv('DATABASE_PASSWORD', 'Raw%20@Pass!')
+    monkeypatch.delenv('DB_POOL_SIZE', raising=False)
+    monkeypatch.delenv('DB_MAX_OVERFLOW', raising=False)
+    eng = db.new_engine()
+    try:
+        assert eng.url.password == 'Raw%20@Pass!'
+        assert eng.pool.size() == 3
+        assert eng.pool._max_overflow == 3
+    finally:
+        eng.dispose()
+
+
+def test_database_message_includes_username_not_password():
+    err = OperationalError('connect', {}, Exception('FATAL: password authentication failed for user "postgres"'))
+    msg = database_message(err, 'postgresql://postgres.ref:super-secret@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres')
+    assert 'postgres.ref' in msg
+    assert 'super-secret' not in msg
 
 
 def test_report_image_roundtrip():

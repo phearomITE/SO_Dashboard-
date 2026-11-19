@@ -6,12 +6,14 @@ from sqlalchemy.engine import make_url
 def database_message(exc, url=None):
     raw=str(getattr(exc,'orig',exc)).lower()
     target='configured PostgreSQL server'
+    user=''
     if url is not None:
         try:
             u=make_url(url);target=f'{u.host or "127.0.0.1"}:{u.port or 5432} / {u.database or ""}'
+            user=u.username or ''
         except Exception:pass
     if 'password authentication failed' in raw:
-        return f'Database login rejected at {target}. Check DB_USER and DB_PASSWORD in .env. Existing Docker volumes retain their original password.'
+        return f'Database login rejected for user "{user}" at {target}. Check DB_USER and DB_PASSWORD or DATABASE_URL (for Supabase pooler use postgres.<project-ref> and an alphanumeric password without special characters).'
     if 'does not exist' in raw and 'database' in raw:
         return f'Database does not exist at {target}. Create the configured database or correct DB_NAME in .env.'
     if any(x in raw for x in ('connection refused','10061','actively refused')):
