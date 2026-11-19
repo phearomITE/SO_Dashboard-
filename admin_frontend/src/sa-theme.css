@@ -764,6 +764,504 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: var(--sa-canvas);
 }
 
+/* Dashboard SA: Annual Leave, Miss Report Summary Bar, Avatars & Modals */
+.sa-header-actions,
+.reason-export-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sa-al-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.sa-al-kpi {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 18px 22px;
+  background: var(--sa-surface);
+  border: 1px solid var(--sa-line);
+  border-radius: 14px;
+  box-shadow: 0 2px 4px rgba(23, 47, 38, 0.025);
+}
+
+.sa-al-kpi strong {
+  font-size: clamp(26px, 2.2vw, 32px);
+  font-weight: 680;
+  letter-spacing: -1px;
+  line-height: 1;
+  color: var(--sa-emerald);
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-al-kpi span {
+  font-size: 13.5px;
+  font-weight: 520;
+  color: #53645f;
+}
+
+.sa-card-unified {
+  overflow: hidden;
+  padding: 0;
+}
+
+.sa-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #edf1ed;
+  background: var(--sa-surface);
+}
+
+.sa-filter-bar .field {
+  min-width: 135px;
+  flex: 0 1 165px;
+}
+
+.sa-filter-bar .sa-filter-search {
+  flex: 1 1 240px;
+  min-width: 210px;
+}
+
+.sa-member-count {
+  margin-left: auto;
+  align-self: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--sa-muted);
+  white-space: nowrap;
+}
+
+.sa-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.sa-avatar {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 50%;
+  background: #e5f3eb;
+  color: #176855;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  border: 1px solid #d5e6dc;
+}
+
+.sa-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.sa-name-copy {
+  min-width: 0;
+}
+
+.sa-name-copy b {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 630;
+  color: var(--sa-heading);
+  line-height: 1.3;
+}
+
+.sa-name-copy small,
+.sa-muted-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--sa-muted);
+}
+
+.sa-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-set-leave-btn {
+  min-height: 32px !important;
+  height: 32px !important;
+  padding: 0 12px !important;
+  font-size: 12px !important;
+}
+
+/* Miss Report 6-column divided summary bar */
+.sa-miss-summary-bar {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-bottom: 1px solid #edf1ed;
+  background: var(--sa-surface);
+}
+
+.sa-miss-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 16px 20px;
+  border: 0;
+  border-right: 1px solid #edf1ed;
+  background: transparent;
+  text-align: left;
+  min-width: 0;
+}
+
+.sa-miss-stat:last-child {
+  border-right: 0;
+}
+
+.sa-miss-stat small {
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--sa-muted);
+}
+
+.sa-miss-stat strong {
+  margin-top: 8px;
+  font-size: clamp(22px, 1.9vw, 28px);
+  font-weight: 680;
+  letter-spacing: -0.8px;
+  line-height: 1.1;
+  color: var(--sa-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-miss-stat strong.sa-miss-emerald {
+  color: var(--sa-emerald);
+}
+
+.sa-miss-stat strong.sa-miss-terracotta {
+  color: #b55f37;
+}
+
+.sa-miss-stat-btn {
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.sa-miss-stat-btn:hover {
+  background: #f6faf7;
+}
+
+.sa-miss-click-hint {
+  margin-top: 5px;
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.sa-miss-click-hint.emerald {
+  color: var(--sa-emerald);
+}
+
+.sa-miss-click-hint.terracotta {
+  color: #b55f37;
+}
+
+.page-reason-summary .sa-card-unified .data-table,
+.page-reason-summary .sa-modal .data-table {
+  table-layout: auto;
+}
+
+.page-reason-summary .sa-card-unified .data-table th,
+.page-reason-summary .sa-modal .data-table th {
+  width: auto !important;
+}
+
+.sa-awaiting-text {
+  color: #56675f;
+  font-weight: 520;
+}
+
+.sa-muted-text {
+  color: var(--sa-muted);
+}
+
+.sa-miss-num {
+  color: #b55f37;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-summary-cell,
+.sa-written-list {
+  white-space: pre-line;
+  font-family: "Kantumruy Pro", "Noto Sans Khmer", var(--font-sans);
+  line-height: 1.6;
+  max-width: 340px;
+}
+
+.sa-written-list > div + div {
+  margin-top: 3px;
+}
+
+.sa-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sa-icon-action {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--sa-border-ctrl);
+  border-radius: 8px;
+  background: var(--sa-surface);
+  color: #53645f;
+}
+
+.sa-icon-action:hover {
+  background: #f0f5f2;
+  color: var(--sa-heading);
+}
+
+.sa-icon-action.sa-icon-danger:hover {
+  background: #fff3ee;
+  border-color: #ebc3b7;
+  color: #973e35;
+}
+
+.sa-edit-inline-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 11px !important;
+  font-size: 12px !important;
+}
+
+/* SA Modals */
+.sa-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(18, 38, 30, 0.42);
+  backdrop-filter: blur(2px);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.sa-modal {
+  width: min(500px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--sa-surface);
+  border: 1px solid var(--sa-line);
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(17, 41, 32, 0.24);
+  overflow: hidden;
+}
+
+.sa-modal--wide {
+  width: min(1140px, 96vw);
+  max-height: 88vh;
+}
+
+.sa-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #edf1ed;
+}
+
+.sa-modal-eyebrow {
+  font-size: 12.5px;
+  color: var(--sa-muted);
+  margin-bottom: 3px;
+}
+
+.sa-modal-head h3 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 680;
+  letter-spacing: -0.45px;
+  color: var(--sa-heading);
+}
+
+.sa-modal-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sa-modal-search {
+  width: 240px;
+  height: 36px;
+  border: 1px solid var(--sa-border-ctrl);
+  border-radius: 8px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  color: var(--sa-ink);
+  background: var(--sa-surface);
+}
+
+.sa-modal-close {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #53645f;
+  font-size: 20px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.sa-modal-close:hover {
+  background: #f0f5f2;
+  color: var(--sa-heading);
+}
+
+.sa-modal-body {
+  display: grid;
+  gap: 16px;
+  padding: 20px 24px;
+  overflow: auto;
+}
+
+.sa-modal-body .field {
+  min-width: 0;
+  max-width: none;
+  flex: none;
+  width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sa-heading);
+}
+
+.sa-modal-body .field select,
+.sa-modal-body .field input {
+  height: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  font-size: 14px;
+  padding: 0 13px;
+}
+
+.sa-reason-textarea {
+  width: 100%;
+  border: 1px solid var(--sa-border-ctrl);
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-family: "Kantumruy Pro", "Noto Sans Khmer", var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--sa-ink);
+  resize: vertical;
+}
+
+.sa-muted-inline {
+  font-weight: 450;
+  color: var(--sa-muted);
+}
+
+.sa-modal-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--sa-muted);
+}
+
+.sa-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid #edf1ed;
+}
+
+.sa-btn-ghost {
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--sa-border-ctrl);
+  border-radius: 9px;
+  background: var(--sa-surface);
+  color: #404f48;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.sa-btn-ghost:hover {
+  background: #f5f8f6;
+}
+
+.sa-btn-emerald {
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--sa-emerald);
+  border-radius: 9px;
+  background: var(--sa-emerald);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.sa-btn-emerald:hover {
+  background: var(--sa-emerald-hover);
+}
+
+.sa-modal-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 24px;
+  border-bottom: 1px solid #edf1ed;
+  background: var(--sa-surface-subtle);
+}
+
+.sa-modal-table-wrap {
+  overflow: auto;
+  flex: 1;
+}
+
+@media (max-width: 1100px) {
+  .sa-miss-summary-bar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .sa-miss-stat {
+    border-bottom: 1px solid #edf1ed;
+  }
+}
+
+@media (max-width: 720px) {
+  .sa-al-kpis {
+    grid-template-columns: 1fr;
+  }
+  .sa-miss-summary-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sa-modal-search {
+    width: 100%;
+  }
+}
+
 /* Responsive Breakpoints */
 @media (max-width: 1000px) {
   .sidebar {

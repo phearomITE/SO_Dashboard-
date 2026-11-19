@@ -223,3 +223,340 @@ html.embedded .profile-link {
   background: #e5f3eb !important;
   color: #156454 !important;
 }
+
+/* Dashboard SA Map Toolbar, Markers, Tooltips, Legend & Check-in Detail Modal */
+.kpi-detail-link {
+  color: #156454;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.sa-map-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 7px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  border: 1px solid #dfe7e4;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(23, 47, 38, 0.12);
+}
+
+.sa-map-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 11px;
+  background: transparent;
+  color: #485b54;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.sa-map-btn:hover {
+  background: #f0f5f2;
+  color: #172e28;
+}
+
+.sa-map-btn.active {
+  background: #e3f1ea;
+  color: #156454;
+  font-weight: 700;
+}
+
+.sa-dealer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px 5px 10px;
+  margin-left: 4px;
+  border-left: 1px solid #e2eae5;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 650;
+  color: #172e28;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sa-dealer-toggle input[type="checkbox"] {
+  accent-color: #156454;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.mapwrap .map-key {
+  top: auto !important;
+  bottom: 12px !important;
+  left: 12px !important;
+  z-index: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px !important;
+  border: 1px solid #dfe7e4 !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 2px 10px rgba(23, 47, 38, 0.1) !important;
+  color: #364940 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.mapwrap .map-key i {
+  width: 9px;
+  height: 9px;
+  background: #167554;
+}
+
+.mapwrap .map-key .wrong i {
+  background: #c84b31;
+}
+
+.mapwrap .map-key .dealer i {
+  background: #c77b2d;
+  border-radius: 3px;
+}
+
+.dealer-marker {
+  display: block !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+  min-height: 34px !important;
+  max-height: 34px !important;
+  border: 2.5px solid #0b7e48 !important;
+  border-radius: 50% !important;
+  background-color: #ffffff !important;
+  background-image: url('/static/chip_mong_foodbev.jpg') !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 24px 24px !important;
+  box-shadow: 0 3px 10px rgba(14, 62, 42, 0.28) !important;
+}
+
+.pin.sa-num-pin {
+  width: 26px !important;
+  height: 26px !important;
+  border: 2.5px solid #ffffff !important;
+  border-radius: 50% !important;
+  color: #ffffff !important;
+  font-family: var(--font-sans) !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  display: grid !important;
+  place-items: center !important;
+  line-height: 1 !important;
+  box-shadow: 0 2px 6px rgba(17, 55, 46, 0.34) !important;
+}
+
+.pin.sa-num-pin.wrong-plan {
+  box-shadow: 0 0 0 2px rgba(200, 75, 49, 0.3), 0 2px 6px rgba(120, 30, 15, 0.3) !important;
+}
+
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background: rgba(22, 117, 84, 0.25) !important;
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background: #167554 !important;
+  color: #ffffff !important;
+  font-family: var(--font-sans) !important;
+  font-weight: 700 !important;
+}
+
+.leaflet-tooltip.sa-pin-tooltip {
+  background: #ffffff;
+  color: #172e28;
+  border: 1px solid #d5e2db;
+  border-radius: 9px;
+  padding: 6px 11px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(23, 47, 38, 0.16);
+}
+
+.leaflet-tooltip.sa-pin-tooltip::before {
+  border-top-color: #ffffff;
+}
+
+.kpi-modal {
+  width: min(1160px, 95vw) !important;
+  max-width: 95vw !important;
+  border-radius: 16px !important;
+  border: 1px solid #dfe7e4 !important;
+  color: #192d2b !important;
+  font-family: var(--font-sans) !important;
+}
+
+.kpi-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px !important;
+  border-bottom: 1px solid #edf1ed !important;
+  background: #ffffff;
+}
+
+.kpi-modal-eyebrow {
+  font-size: 12px;
+  color: #677975;
+  margin-bottom: 3px;
+}
+
+.kpi-modal-head h3 {
+  font-size: 20px !important;
+  font-weight: 680 !important;
+  letter-spacing: -0.4px;
+  color: #172e28 !important;
+  margin: 0;
+}
+
+.kpi-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kpi-modal-search {
+  width: 240px;
+  max-width: 45vw;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #d8e2dc;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: #192d2b;
+  background: #ffffff;
+}
+
+.kpi-modal-export {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #d8e2dc;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172e28;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kpi-modal-export:hover {
+  background: #f5f8f6;
+}
+
+.kpi-modal-close {
+  width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  border: 1px solid #e2eae5 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  color: #485b54 !important;
+  font-size: 15px !important;
+  cursor: pointer;
+}
+
+.kpi-modal-close:hover {
+  background: #f0f5f2 !important;
+}
+
+.kpi-modal-body {
+  padding: 12px 22px 20px !important;
+  max-height: 70vh !important;
+}
+
+.kpi-modal th {
+  background: #f6f8f6 !important;
+  color: #687b70 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.kpi-modal td {
+  font-size: 12.5px !important;
+  color: #253b34 !important;
+  white-space: nowrap;
+}
+
+.sa-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-plan-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.sa-plan-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.sa-plan-badge--ok {
+  background: #e5f3eb;
+  color: #156454;
+}
+
+.sa-plan-badge--bad {
+  background: #fff3ee;
+  color: #973e35;
+}
+
+.sa-plan-badge--neutral {
+  background: #eef3f0;
+  color: #56675f;
+}
+
+.kpi-map-button {
+  background: #e5f3eb !important;
+  border: 1px solid #cce7d7 !important;
+  color: #156454 !important;
+}
+
+@media (max-width: 700px) {
+  .sa-map-toolbar {
+    max-width: calc(100% - 60px);
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 4px;
+  }
+  .sa-map-btn {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+  .kpi-modal-search {
+    width: 100%;
+    max-width: 100%;
+  }
+}

@@ -127,7 +127,13 @@ class AttendanceRangeOverride(BaseModel):
     start: date
     end: date
     employee_ids: list[str] = Field(min_length=1, max_length=100)
-    attendance: str = Field(pattern=r"^(AL Full Day|AL Morning|AL Afternoon)$")
+    attendance: str = Field(pattern=r"^(AL Full Day|AL Morning|AL Afternoon|Clear dashboard AL)$")
+
+
+class MissReasonBody(BaseModel):
+    start: date
+    end: date
+    reason: str = Field(default="", max_length=4000)
 
 
 def _roster_out(row: Roster) -> dict:
@@ -499,6 +505,7 @@ def al_summary(request: Request, day: date, region: str | None = None, dealer: s
                            AND v.report_date=:day) AS has_checkin,
                     coalesce(al.full_day,false) AS full_day,coalesce(al.morning,false) AS morning_al,
                     coalesce(al.afternoon,false) AS afternoon_al,coalesce(al.sources,'') AS leave_sources,
+                    coalesce(al.leave_from,'') AS leave_from,coalesce(al.leave_to,'') AS leave_to,
                     coalesce(nullif(g.code,''),nullif(g.title,''),
                              nullif(concat_ws('-',nullif(r.region,''),nullif(r.dealer,'')),''),'—') AS telegram_group
                     FROM so_roster_v1 r
@@ -506,7 +513,9 @@ def al_summary(request: Request, day: date, region: str | None = None, dealer: s
                       SELECT bool_or(l.start<=:day_start AND l.end>=:day_end) AS full_day,
                              bool_or(l.start<:noon AND l.end>:morning_start) AS morning,
                              bool_or(l.start<:afternoon_end AND l.end>:afternoon_start) AS afternoon,
-                             string_agg(DISTINCT l.source, ', ') AS sources
+                             string_agg(DISTINCT l.source, ', ') AS sources,
+                             to_char(min(l.start)::date, 'YYYY-MM-DD') AS leave_from,
+                             to_char(max((l.end - interval '1 microsecond')::date), 'YYYY-MM-DD') AS leave_to
                       FROM so_leave_v1 l WHERE l.employee=r.employee AND l.uid=r.uid
                         AND l.start<:day_end AND l.end>:day_start
                     ) al ON TRUE
@@ -522,6 +531,10 @@ def al_summary(request: Request, day: date, region: str | None = None, dealer: s
                     ) latest ON TRUE
                     LEFT JOIN so_groups_v1 g ON g.id=latest.chat_id
                     WHERE {' AND '.join(clauses)} ORDER BY r.region,r.dealer,r.name"""), params).mappings().all()]
+        scheduled_count = conn.execute(text(f"""SELECT count(DISTINCT r.employee)
+                    FROM so_roster_v1 r
+                    JOIN so_leave_v1 l ON l.employee=r.employee AND l.uid=r.uid
+                    WHERE {' AND '.join(clauses)} AND l.start>=:day_end"""), params).scalar_one()
     for row in rows:
         if row["full_day"] or (row["morning_al"] and row["afternoon_al"]):
             leave_status = "AL Full Day"
@@ -532,6 +545,8 @@ def al_summary(request: Request, day: date, region: str | None = None, dealer: s
         else:
             leave_status = ""
         row["leave_status"] = leave_status
+        row["leave_from"] = row.get("leave_from") or ""
+        row["leave_to"] = row.get("leave_to") or ""
         row["full_day_conflict"] = bool(
             (row["full_day"] or (row["morning_al"] and row["afternoon_al"])) and row["has_checkin"]
         )
@@ -549,7 +564,9 @@ def al_summary(request: Request, day: date, region: str | None = None, dealer: s
             row.pop(key, None)
     payload={"date": day.isoformat(),
             "definition": "AL comes from a saved Telegram/Morning Talk leave or dashboard correction. A future date without activity is Scheduled, not AL. Missing-report alerts are suppressed only by a saved leave interval covering that alert window.",
-            "items": rows, "al_count": sum(bool(x["leave_status"]) for x in rows)}
+            "items": rows, "al_count": sum(bool(x["leave_status"]) for x in rows),
+            "scheduled_count": int(scheduled_count or 0),
+            "roster_total": len(rows)}
     _cache_set(request,cache_key,payload,5)
     return payload
 
@@ -716,8 +733,7 @@ def override_attendance(employee_id: str, body: AttendanceOverride, request: Req
         if not group or not group.active:
             group = session.scalar(select(Group).where(Group.active == 1,
                                   Group.code == f"{person.region}-{person.dealer}"))
-        if body.attendance.startswith("AL ") and not group:
-            raise HTTPException(409, f"No active Telegram group is registered for {person.region}-{person.dealer}.")
+        group_id = group.id if group else 0
         key = f"dashboard_al_override:{body.day.isoformat()}:{employee_id}"
         before = state(session, key, {})
         after = {"attendance": body.attendance, "changed_by": admin, "changed_at": db.now().isoformat()}
@@ -732,15 +748,15 @@ def override_attendance(employee_id: str, body: AttendanceOverride, request: Req
             else:
                 leave_start, leave_end = day_start + timedelta(hours=13), day_start + timedelta(hours=17)
             already_covered = session.scalar(select(Leave.id).where(
-                Leave.chat == group.id, Leave.uid == person.uid,
+                Leave.uid == person.uid,
                 Leave.start <= leave_start, Leave.end >= leave_end).limit(1))
             if not already_covered:
-                session.add(Leave(chat=group.id, uid=person.uid, employee=person.employee,
+                session.add(Leave(chat=group_id, uid=person.uid, employee=person.employee,
                                   name=person.name, region=person.region, dealer=person.dealer,
                                   position=person.position, start=leave_start, end=leave_end,
                                   source="Dashboard admin correction", recorded_by=int(os.getenv("DASHBOARD_ADMIN_ID", "0")),
                                   recorded_at=db.now()))
-            session.execute(delete(Missing).where(Missing.chat == group.id, Missing.uid == person.uid,
+            session.execute(delete(Missing).where(Missing.uid == person.uid,
                                 Missing.start < leave_end, Missing.end > leave_start))
         if body.attendance == "Clear dashboard AL":
             after = {"attendance": "Cleared dashboard AL", "changed_by": admin,
@@ -784,11 +800,10 @@ def _override_attendance_range_impl(body: AttendanceRangeOverride, request: Requ
             if not group or not group.active:
                 group = session.scalar(select(Group).where(
                     Group.active == 1, Group.code == f"{person.region}-{person.dealer}"))
-            if not group:
-                raise HTTPException(409, f"No active Telegram group is registered for {person.region}-{person.dealer}.")
-            assignments.append((person, group))
+            group_id = group.id if group else 0
+            assignments.append((person, group_id))
 
-        for person, group in assignments:
+        for person, group_id in assignments:
             previous = []
             for day in days:
                 day_start = datetime.combine(day, datetime.min.time())
@@ -797,7 +812,8 @@ def _override_attendance_range_impl(body: AttendanceRangeOverride, request: Requ
                 prior = state(session, key, {})
                 if prior:
                     previous.append({"date": day.isoformat(), **prior})
-                after = {"attendance": body.attendance, "changed_by": admin,
+                after = {"attendance": "Cleared dashboard AL" if body.attendance == "Clear dashboard AL" else body.attendance,
+                         "changed_by": admin,
                          "changed_at": recorded_at.isoformat(), "range_start": body.start.isoformat(),
                          "range_end": body.end.isoformat()}
 
@@ -807,25 +823,26 @@ def _override_attendance_range_impl(body: AttendanceRangeOverride, request: Requ
                     Leave.employee == person.employee, Leave.uid == person.uid,
                     Leave.source == "Dashboard admin correction",
                     Leave.start < day_end, Leave.end > day_start))
-                if body.attendance == "AL Full Day":
-                    leave_start, leave_end = day_start, day_end
-                elif body.attendance == "AL Morning":
-                    leave_start, leave_end = day_start + timedelta(hours=8), day_start + timedelta(hours=12)
-                else:
-                    leave_start, leave_end = day_start + timedelta(hours=13), day_start + timedelta(hours=17)
-                already_covered = session.scalar(select(Leave.id).where(
-                    Leave.chat == group.id, Leave.uid == person.uid,
-                    Leave.start <= leave_start, Leave.end >= leave_end).limit(1))
-                if not already_covered:
-                    session.add(Leave(chat=group.id, uid=person.uid, employee=person.employee,
-                                      name=person.name, region=person.region, dealer=person.dealer,
-                                      position=person.position, start=leave_start, end=leave_end,
-                                      source="Dashboard admin correction",
-                                      recorded_by=int(os.getenv("DASHBOARD_ADMIN_ID", "0")),
-                                      recorded_at=recorded_at))
-                session.execute(delete(Missing).where(
-                    Missing.chat == group.id, Missing.uid == person.uid,
-                    Missing.start < leave_end, Missing.end > leave_start))
+                if body.attendance != "Clear dashboard AL":
+                    if body.attendance == "AL Full Day":
+                        leave_start, leave_end = day_start, day_end
+                    elif body.attendance == "AL Morning":
+                        leave_start, leave_end = day_start + timedelta(hours=8), day_start + timedelta(hours=12)
+                    else:
+                        leave_start, leave_end = day_start + timedelta(hours=13), day_start + timedelta(hours=17)
+                    already_covered = session.scalar(select(Leave.id).where(
+                        Leave.uid == person.uid,
+                        Leave.start <= leave_start, Leave.end >= leave_end).limit(1))
+                    if not already_covered:
+                        session.add(Leave(chat=group_id, uid=person.uid, employee=person.employee,
+                                          name=person.name, region=person.region, dealer=person.dealer,
+                                          position=person.position, start=leave_start, end=leave_end,
+                                          source="Dashboard admin correction",
+                                          recorded_by=int(os.getenv("DASHBOARD_ADMIN_ID", "0")),
+                                          recorded_at=recorded_at))
+                    session.execute(delete(Missing).where(
+                        Missing.uid == person.uid,
+                        Missing.start < leave_end, Missing.end > leave_start))
                 put(session, key, after)
             _audit(session.connection(), admin, "override_range", "attendance",
                    f"{body.start}:{body.end}:{person.employee}",
@@ -978,3 +995,52 @@ def actual_plan_summary(request:Request,start:date,end:date,region:str|None=None
     payload=actual_plan_report(db.engine,start,end,region,dealer,q)
     _cache_set(request,key,payload,20)
     return payload
+
+
+@router.get("/admin/miss-report")
+def get_miss_report(request: Request, day: date | None = None, start: date | None = None,
+                    end: date | None = None, region: str | None = None, dealer: str | None = None,
+                    controller: str | None = None,
+                    language: str = Query(default="km", pattern="^(km|en|both)$"),
+                    q: str = Query(default="", max_length=100),
+                    _admin: str = Depends(current_admin)):
+    from app.miss_report import miss_report_data
+    start, end = reporting_period(day, start, end)
+    key = f"so-dashboard:v3:miss-report:{start}:{end}:{region or '*'}:{dealer or '*'}:{controller or '*'}:{language}:{q}"
+    cached = _cache_get(request, key)
+    if cached is not None:
+        return cached
+    payload = miss_report_data(
+        db.engine, start, end, region=region, dealer=dealer,
+        controller=controller, q=q, language=language,
+    )
+    _cache_set(request, key, payload, 10)
+    return payload
+
+
+@router.put("/admin/miss-report/{employee_id}/reason")
+def update_miss_report_reason(employee_id: str, body: MissReasonBody, request: Request,
+                              admin: str = Depends(current_admin)):
+    from app.miss_report import save_miss_reason
+    start, end = reporting_period(None, body.start, body.end)
+    with db.Session.begin() as session:
+        before = state(session, f"miss_reason_override:{start.isoformat()}:{end.isoformat()}:{employee_id}", {})
+        after = save_miss_reason(session, employee_id, start, end, body.reason, admin)
+        _audit(session.connection(), admin, "update", "miss_reason",
+               f"{start}:{end}:{employee_id}", before=before, after=after)
+    invalidate_cache(request)
+    return after
+
+
+@router.delete("/admin/miss-report/{employee_id}/reason")
+def clear_miss_report_reason(employee_id: str, start: date, end: date, request: Request,
+                             admin: str = Depends(current_admin)):
+    from app.miss_report import delete_miss_reason
+    start, end = reporting_period(None, start, end)
+    with db.Session.begin() as session:
+        before = state(session, f"miss_reason_override:{start.isoformat()}:{end.isoformat()}:{employee_id}", {})
+        after = delete_miss_reason(session, employee_id, start, end, admin)
+        _audit(session.connection(), admin, "delete", "miss_reason",
+               f"{start}:{end}:{employee_id}", before=before, after=after)
+    invalidate_cache(request)
+    return after

@@ -1075,132 +1075,637 @@ function ReasonSummary() {
 function ALPage() {
   const [region, setRegion] = useState("All Regions");
   const [dealer, setDealer] = useState("All Dealers");
-  const initialDay=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Phnom_Penh",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const initialDay = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Phnom_Penh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
   const [date, setDate] = useState(initialDay);
-  const [employeeSearch, setEmployeeSearch] = useState("");
-  const [attendanceSearch,setAttendanceSearch]=useState("");
-  const [status, setStatus] = useState("All Status");
-  const [rows, setRows] = useState([]); const [error,setError]=useState("");
-  const [loading,setLoading]=useState(true);
-  const [selectedEmployees,setSelectedEmployees]=useState([]);
-  const [rangeFrom,setRangeFrom]=useState(initialDay);
-  const [rangeTo,setRangeTo]=useState(initialDay);
-  const [rangeAttendance,setRangeAttendance]=useState("AL Range");
-  const [savingRange,setSavingRange]=useState(false);
-  const [success,setSuccess]=useState("");
-  const [rangeReportRows,setRangeReportRows]=useState([]);
-  const [rangeReportPeriod,setRangeReportPeriod]=useState(null);
-  const [rangeReportLoaded,setRangeReportLoaded]=useState(false);
-  const [rangeReportLoading,setRangeReportLoading]=useState(false);
-  async function loadRows(){
-    const q=new URLSearchParams({day:date});if(region!=="All Regions")q.set("region",region);if(dealer!=="All Dealers")q.set("dealer",dealer);
-    setLoading(true);setError("");
-    try{const {items}=await adminApi(`/api/v1/admin/al?${q}`);setRows(items.map(x=>({id:x.employee_id,name:x.real_name,region:x.region,dealer:x.dealer,role:x.position,attendance:x.attendance,leaveStatus:x.leave_status||"",hasCheckin:x.has_checkin,fullDayConflict:x.full_day_conflict,telegramGroup:x.telegram_group,source:x.source})));}
-    catch(e){setRows([]);setError(e.message)}
-    finally{setLoading(false)}
-  }
-  useEffect(()=>{loadRows()},[date,region,dealer]);
-  useEffect(()=>{setRangeReportLoaded(false)},[region,dealer]);
-  useEffect(()=>{setSelectedEmployees([])},[region,dealer]);
-  const attendanceFiltered = rows.filter(r =>
-    (region === "All Regions" || r.region === region) &&
-    (dealer === "All Dealers" || r.dealer === dealer) &&
-    (status === "All Status" || r.attendance === status || r.leaveStatus === status) &&
-    [r.id,r.name,r.telegramGroup,r.region,r.dealer].join(" ").toLowerCase().includes(attendanceSearch.trim().toLowerCase())
-  ).sort((a,b)=>a.region.localeCompare(b.region)||a.dealer.localeCompare(b.dealer)||a.name.localeCompare(b.name));
-  const employeeChoices=rows.filter(r=>(region==="All Regions"||r.region===region)&&(dealer==="All Dealers"||r.dealer===dealer)
-    &&[r.id,r.name,r.telegramGroup,r.region,r.dealer].join(" ").toLowerCase().includes(employeeSearch.trim().toLowerCase()))
-    .sort((a,b)=>a.region.localeCompare(b.region)||a.dealer.localeCompare(b.dealer)||a.name.localeCompare(b.name));
-  const setAttendance=async(id,value)=>{setError("");setSuccess("");try{await adminApi(`/api/v1/admin/al/${encodeURIComponent(id)}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({day:date,attendance:value})});await loadRows()}catch(e){setError(e.message)}};
-  const toggleEmployee=(id,checked)=>setSelectedEmployees(current=>checked?[...new Set([...current,id])]:current.filter(value=>value!==id));
-  const applyRange=async()=>{
-    setError("");setSuccess("");
-    if(!selectedEmployees.length){setError("Select at least one employee first.");return;}
-    const days=(Date.parse(`${rangeTo}T00:00:00Z`)-Date.parse(`${rangeFrom}T00:00:00Z`))/86400000+1;
-    if(!Number.isFinite(days)||days<1||days>90){setError("Choose an ordered date range of 1 to 90 days.");return;}
-    setSavingRange(true);
-    try{
-      const attendance=rangeAttendance==="AL Range"?"AL Full Day":rangeAttendance;
-      const result=await adminApi("/api/v1/admin/al/range",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({start:rangeFrom,end:rangeTo,employee_ids:selectedEmployees,attendance})});
-      setSuccess(`${rangeAttendance==="AL Range"?"AL Range (full day)":result.attendance} saved for ${result.employee_ids.length} employee(s), ${result.days} day(s).`);
-      setSelectedEmployees([]);await Promise.all([loadRows(),loadRangeReport()]);
-    }catch(e){setError(e.message)}
-    finally{setSavingRange(false)}
-  };
-  const loadRangeReport=async()=>{
+  const [attendanceSearch, setAttendanceSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState("All Telegram groups");
+  const [status, setStatus] = useState("All SO");
+  const [rows, setRows] = useState([]);
+  const [scheduledCount, setScheduledCount] = useState(0);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [success, setSuccess] = useState("");
+
+  // Set annual leave modal state
+  const [modalRow, setModalRow] = useState(null);
+  const [modalType, setModalType] = useState("AL Date Range");
+  const [modalStart, setModalStart] = useState(initialDay);
+  const [modalEnd, setModalEnd] = useState(initialDay);
+  const [savingModal, setSavingModal] = useState(false);
+  const [modalError, setModalError] = useState("");
+
+  // Saved range viewer modal state
+  const [rangesOpen, setRangesOpen] = useState(false);
+  const [rangeFrom, setRangeFrom] = useState(initialDay);
+  const [rangeTo, setRangeTo] = useState(initialDay);
+  const [rangeReportRows, setRangeReportRows] = useState([]);
+  const [rangeReportLoading, setRangeReportLoading] = useState(false);
+
+  async function loadRows() {
+    const q = new URLSearchParams({ day: date });
+    if (region !== "All Regions") q.set("region", region);
+    if (dealer !== "All Dealers") q.set("dealer", dealer);
+    setLoading(true);
     setError("");
-    const days=(Date.parse(`${rangeTo}T00:00:00Z`)-Date.parse(`${rangeFrom}T00:00:00Z`))/86400000+1;
-    if(!Number.isFinite(days)||days<1||days>90){setError("Choose an ordered date range of 1 to 90 days.");return;}
-    const q=new URLSearchParams({start:rangeFrom,end:rangeTo});
-    if(region!=="All Regions")q.set("region",region);
-    if(dealer!=="All Dealers")q.set("dealer",dealer);
-    setRangeReportLoading(true);setRangeReportLoaded(false);
-    try{
-      const result=await adminApi(`/api/v1/admin/al/range?${q}`);
-      setRangeReportRows(result.items||[]);setRangeReportPeriod({start:result.from_date,end:result.to_date});setRangeReportLoaded(true);
-    }catch(e){setError(e.message)}
-    finally{setRangeReportLoading(false)}
-  };
-  const alCount=attendanceFiltered.filter(r=>Boolean(r.leaveStatus)).length;
-  return <div className="al-page">
-    <div className="section-title al-page-title"><div><h2>Attendance & Annual Leave</h2></div><button className="secondary al-print-button" onClick={()=>window.print()}>Export / Print</button></div>
-    {error&&<p className="api-error" role="alert">{error}</p>}
-    <div className="al-subsection-heading"><div><h3>Review attendance for one day</h3></div></div>
-    <div className="panel controls al-filter-card">
-      <label className="field"><span>Date</span><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>
-      <RegionDealerFilters {...{region,setRegion,dealer,setDealer}} />
-      <label className="field al-attendance-search"><span>Search Employee</span><input value={attendanceSearch} onChange={e=>setAttendanceSearch(e.target.value)} placeholder="Employee ID, name or Telegram group…"/></label>
-      <label className="field"><span>Status</span><select value={status} onChange={e=>setStatus(e.target.value)}><option>All Status</option><option>AL Full Day</option><option>AL Morning</option><option>AL Afternoon</option><option>Present</option><option>Scheduled</option><option>Not Reported</option></select></label>
+    try {
+      const payload = await adminApi(`/api/v1/admin/al?${q}`);
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      setRows(
+        items.map((x) => ({
+          id: x.employee_id,
+          telegramId: x.telegram_id,
+          name: x.real_name,
+          region: x.region,
+          dealer: x.dealer,
+          role: x.position,
+          attendance: x.attendance,
+          leaveStatus: x.leave_status || "",
+          leaveFrom: x.leave_from || "",
+          leaveTo: x.leave_to || "",
+          hasCheckin: x.has_checkin,
+          fullDayConflict: x.full_day_conflict,
+          telegramGroup: x.telegram_group,
+          source: x.source,
+        })),
+      );
+      setScheduledCount(Number(payload?.scheduled_count ?? 0));
+    } catch (e) {
+      setRows([]);
+      setScheduledCount(0);
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadRows();
+  }, [date, region, dealer]);
+
+  const groupOptions = useMemo(
+    () =>
+      [...new Set(rows.map((r) => r.telegramGroup).filter((g) => g && g !== "—"))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [rows],
+  );
+
+  const attendanceFiltered = useMemo(() => {
+    const q = attendanceSearch.trim().toLowerCase();
+    return rows
+      .filter((r) => {
+        if (region !== "All Regions" && r.region !== region) return false;
+        if (dealer !== "All Dealers" && r.dealer !== dealer) return false;
+        if (groupFilter !== "All Telegram groups" && r.telegramGroup !== groupFilter) return false;
+        if (status === "On annual leave" && !r.leaveStatus) return false;
+        if (status === "Not on leave" && Boolean(r.leaveStatus)) return false;
+        if (
+          status !== "All SO" &&
+          status !== "On annual leave" &&
+          status !== "Not on leave" &&
+          r.attendance !== status &&
+          r.leaveStatus !== status
+        ) {
+          return false;
+        }
+        if (q) {
+          const hay = [r.id, r.telegramId, r.name, r.telegramGroup, r.region, r.dealer]
+            .join(" ")
+            .toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          (a.name || "").localeCompare(b.name || "") ||
+          a.region.localeCompare(b.region) ||
+          a.dealer.localeCompare(b.dealer),
+      );
+  }, [rows, region, dealer, groupFilter, status, attendanceSearch]);
+
+  const alCount = attendanceFiltered.filter((r) => Boolean(r.leaveStatus)).length;
+
+  function openLeaveModal(row) {
+    setModalRow(row);
+    setModalError("");
+    if (row.leaveFrom && row.leaveTo && row.leaveTo !== row.leaveFrom) {
+      setModalType("AL Date Range");
+      setModalStart(row.leaveFrom);
+      setModalEnd(row.leaveTo);
+    } else if (row.leaveStatus === "AL Morning" || row.leaveStatus === "AL Afternoon" || row.leaveStatus === "AL Full Day") {
+      setModalType("AL Date Range");
+      setModalStart(row.leaveFrom || date);
+      setModalEnd(row.leaveTo || date);
+    } else {
+      setModalType("AL Date Range");
+      setModalStart(date);
+      setModalEnd(date);
+    }
+  }
+
+  async function saveLeaveModal(event) {
+    event?.preventDefault();
+    if (!modalRow || savingModal) return;
+    setModalError("");
+    setSuccess("");
+    const isRangeMode = modalType === "AL Date Range" || modalType === "Clear annual leave";
+    const startVal = modalStart;
+    const endVal = isRangeMode ? modalEnd : modalStart;
+    if (!startVal || !endVal || endVal < startVal) {
+      setModalError("End date must be on or after Start date.");
+      return;
+    }
+    const days = (Date.parse(`${endVal}T00:00:00Z`) - Date.parse(`${startVal}T00:00:00Z`)) / 86400000 + 1;
+    if (!Number.isFinite(days) || days < 1 || days > 90) {
+      setModalError("Choose a date range of 1 to 90 days.");
+      return;
+    }
+    setSavingModal(true);
+    try {
+      if (modalType === "Clear annual leave") {
+        if (startVal === endVal) {
+          await adminApi(`/api/v1/admin/al/${encodeURIComponent(modalRow.id)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ day: startVal, attendance: "Clear dashboard AL" }),
+          });
+        } else {
+          await adminApi("/api/v1/admin/al/range", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              start: startVal,
+              end: endVal,
+              employee_ids: [modalRow.id],
+              attendance: "Clear dashboard AL",
+            }),
+          });
+        }
+        setSuccess(`Annual leave cleared for ${modalRow.name} (${startVal}${endVal !== startVal ? ` to ${endVal}` : ""}).`);
+      } else if (modalType === "AL Date Range") {
+        const result = await adminApi("/api/v1/admin/al/range", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start: startVal,
+            end: endVal,
+            employee_ids: [modalRow.id],
+            attendance: "AL Full Day",
+          }),
+        });
+        setSuccess(`AL Date Range saved for ${modalRow.name} (${result.from_date} to ${result.to_date}, ${result.days} day(s)).`);
+      } else {
+        await adminApi(`/api/v1/admin/al/${encodeURIComponent(modalRow.id)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ day: startVal, attendance: modalType }),
+        });
+        setSuccess(`${modalType} saved for ${modalRow.name} on ${startVal}.`);
+      }
+      setModalRow(null);
+      await loadRows();
+    } catch (e) {
+      setModalError(e.message);
+    } finally {
+      setSavingModal(false);
+    }
+  }
+
+  async function loadRangeReport() {
+    setError("");
+    const days = (Date.parse(`${rangeTo}T00:00:00Z`) - Date.parse(`${rangeFrom}T00:00:00Z`)) / 86400000 + 1;
+    if (!Number.isFinite(days) || days < 1 || days > 90) {
+      setError("Choose an ordered date range of 1 to 90 days.");
+      return;
+    }
+    const q = new URLSearchParams({ start: rangeFrom, end: rangeTo });
+    if (region !== "All Regions") q.set("region", region);
+    if (dealer !== "All Dealers") q.set("dealer", dealer);
+    setRangeReportLoading(true);
+    try {
+      const result = await adminApi(`/api/v1/admin/al/range?${q}`);
+      setRangeReportRows(result.items || []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setRangeReportLoading(false);
+    }
+  }
+
+  const initialsOf = (name) =>
+    String(name || "?")
+      .trim()
+      .split(/\s+/)
+      .map((x) => x[0] || "")
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "?";
+
+  return (
+    <div className="al-page">
+      <div className="section-title al-page-title">
+        <div>
+          <h2>Annual Leave</h2>
+        </div>
+        <div className="sa-header-actions">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              setRangesOpen(true);
+              loadRangeReport();
+            }}
+          >
+            Scheduled ranges
+          </button>
+          <button type="button" className="secondary al-print-button" onClick={() => window.print()}>
+            Export / Print
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <p className="api-error" role="alert">
+          {error}
+        </p>
+      )}
+      {success && (
+        <p className="al-success" role="status">
+          {success}
+        </p>
+      )}
+
+      <div className="sa-al-kpis">
+        <div className="sa-al-kpi">
+          <strong>{loading ? "…" : error ? "—" : alCount}</strong>
+          <span>On annual leave now</span>
+        </div>
+        <div className="sa-al-kpi">
+          <strong>{loading ? "…" : error ? "—" : scheduledCount}</strong>
+          <span>Scheduled leave</span>
+        </div>
+        <div className="sa-al-kpi">
+          <strong>{loading ? "…" : error ? "—" : attendanceFiltered.length}</strong>
+          <span>SO in roster</span>
+        </div>
+      </div>
+
+      <section className="panel sa-card-unified">
+        <div className="sa-filter-bar">
+          <label className="field sa-filter-search">
+            <span>Search SO</span>
+            <input
+              value={attendanceSearch}
+              onChange={(e) => setAttendanceSearch(e.target.value)}
+              placeholder="Search SO, Employee ID or Telegram ID…"
+            />
+          </label>
+          <label className="field">
+            <span>Date</span>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </label>
+          <RegionDealerFilters {...{ region, setRegion, dealer, setDealer }} />
+          <label className="field">
+            <span>Group</span>
+            <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+              <option value="All Telegram groups">All Telegram groups</option>
+              {groupOptions.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Filter</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="All SO">All SO</option>
+              <option value="On annual leave">On annual leave</option>
+              <option value="Not on leave">Not on leave</option>
+              <option value="Present">Present</option>
+              <option value="Not Reported">Not Reported</option>
+              <option value="Scheduled">Scheduled</option>
+              <option value="AL Full Day">AL Full Day</option>
+              <option value="AL Morning">AL Morning</option>
+              <option value="AL Afternoon">AL Afternoon</option>
+            </select>
+          </label>
+          <span className="sa-member-count">{attendanceFiltered.length} members</span>
+        </div>
+
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>SO NAME</th>
+                <th>EMPLOYEE ID</th>
+                <th>TELEGRAM ID</th>
+                <th>GROUP</th>
+                <th>ATTENDANCE / LEAVE</th>
+                <th>CHECK-IN</th>
+                <th>ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td className="empty" colSpan={7}>
+                    Loading SO roster…
+                  </td>
+                </tr>
+              ) : (
+                attendanceFiltered.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <div className="sa-name-cell">
+                        <div className="sa-avatar">
+                          <span>{initialsOf(r.name)}</span>
+                          {r.telegramId && (
+                            <img
+                              src={`/api/v1/dashboard/telegram-avatar/${encodeURIComponent(r.telegramId)}`}
+                              alt=""
+                              loading="lazy"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                            />
+                          )}
+                        </div>
+                        <div className="sa-name-copy">
+                          <b>{r.name}</b>
+                          <small>
+                            {r.role || "SO"} · {r.dealer || "—"}
+                          </small>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="sa-mono">{r.id || "—"}</td>
+                    <td className="sa-mono">{r.telegramId || "—"}</td>
+                    <td>{r.telegramGroup || `${r.region}-${r.dealer}`}</td>
+                    <td>
+                      <span
+                        className={
+                          "status " +
+                          (r.leaveStatus ? "danger" : "") +
+                          (r.fullDayConflict ? " status-conflict" : "")
+                        }
+                      >
+                        {r.fullDayConflict
+                          ? "AL Full Day · Check-in conflict"
+                          : r.leaveStatus && r.leaveFrom && r.leaveTo && r.leaveTo !== r.leaveFrom
+                            ? `${r.leaveStatus} (${r.leaveFrom} → ${r.leaveTo})`
+                            : r.attendance}
+                      </span>
+                    </td>
+                    <td>{r.hasCheckin ? "Yes" : "No"}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="secondary sa-set-leave-btn"
+                        onClick={() => openLeaveModal(r)}
+                      >
+                        {r.leaveStatus ? "Edit leave" : "Set leave"}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+              {!loading && !error && attendanceFiltered.length === 0 && (
+                <tr>
+                  <td className="empty" colSpan={7}>
+                    No matching SO members.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {modalRow && (
+        <div
+          className="sa-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sa-al-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !savingModal) setModalRow(null);
+          }}
+        >
+          <form className="sa-modal" onSubmit={saveLeaveModal}>
+            <div className="sa-modal-head">
+              <div>
+                <div className="sa-modal-eyebrow">
+                  ( {modalRow.name} ) ( {modalRow.telegramGroup || `${modalRow.region}-${modalRow.dealer}`} )
+                </div>
+                <h3 id="sa-al-modal-title">Set annual leave</h3>
+              </div>
+              <button
+                type="button"
+                className="sa-modal-close"
+                aria-label="Close"
+                disabled={savingModal}
+                onClick={() => setModalRow(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="sa-modal-body">
+              {modalError && (
+                <p className="api-error" role="alert">
+                  {modalError}
+                </p>
+              )}
+              <label className="field">
+                <span>Leave type</span>
+                <select value={modalType} onChange={(e) => setModalType(e.target.value)}>
+                  <option value="AL Date Range">AL Date Range</option>
+                  <option value="AL Full Day">AL Full Day</option>
+                  <option value="AL Morning">AL Morning</option>
+                  <option value="AL Afternoon">AL Afternoon</option>
+                  <option value="Clear annual leave">Clear annual leave</option>
+                </select>
+              </label>
+
+              {modalType === "AL Date Range" || modalType === "Clear annual leave" ? (
+                <>
+                  <label className="field">
+                    <span>Start date</span>
+                    <input
+                      type="date"
+                      value={modalStart}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setModalStart(v);
+                        if (modalEnd < v) setModalEnd(v);
+                      }}
+                      required
+                    />
+                  </label>
+                  <label className="field">
+                    <span>
+                      End date <small className="sa-muted-inline">(inclusive)</small>
+                    </span>
+                    <input
+                      type="date"
+                      value={modalEnd}
+                      min={modalStart || undefined}
+                      onChange={(e) => setModalEnd(e.target.value)}
+                      required
+                    />
+                  </label>
+                </>
+              ) : (
+                <label className="field">
+                  <span>Date</span>
+                  <input
+                    type="date"
+                    value={modalStart}
+                    onChange={(e) => setModalStart(e.target.value)}
+                    required
+                  />
+                </label>
+              )}
+
+              <p className="sa-modal-hint">
+                {modalType === "Clear annual leave"
+                  ? "Removes dashboard-scheduled annual leave overrides across the selected dates."
+                  : "The bot will skip scheduled missing-report alerts from the start date through the end date."}
+              </p>
+            </div>
+            <div className="sa-modal-footer">
+              <button
+                type="button"
+                className="sa-btn-ghost"
+                disabled={savingModal}
+                onClick={() => setModalRow(null)}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="sa-btn-emerald" disabled={savingModal}>
+                {savingModal ? "Saving…" : "✓ Save changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {rangesOpen && (
+        <div
+          className="sa-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sa-ranges-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRangesOpen(false);
+          }}
+        >
+          <div className="sa-modal sa-modal--wide">
+            <div className="sa-modal-head">
+              <div>
+                <div className="sa-modal-eyebrow">
+                  {rangeFrom} to {rangeTo} · {rangeReportRows.length} entries
+                </div>
+                <h3 id="sa-ranges-title">Scheduled leave ranges</h3>
+              </div>
+              <button
+                type="button"
+                className="sa-modal-close"
+                aria-label="Close"
+                onClick={() => setRangesOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="sa-modal-toolbar">
+              <label className="field">
+                <span>From date</span>
+                <input
+                  type="date"
+                  value={rangeFrom}
+                  max={rangeTo || undefined}
+                  onChange={(e) => setRangeFrom(e.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>To date</span>
+                <input
+                  type="date"
+                  value={rangeTo}
+                  min={rangeFrom || undefined}
+                  onChange={(e) => setRangeTo(e.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                className="secondary"
+                disabled={rangeReportLoading}
+                onClick={loadRangeReport}
+              >
+                {rangeReportLoading ? "Loading…" : "Load ranges"}
+              </button>
+            </div>
+            <div className="sa-modal-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>EMPLOYEE ID</th>
+                    <th>SO NAME</th>
+                    <th>GROUP</th>
+                    <th>REGION</th>
+                    <th>DEALER</th>
+                    <th>AL TYPE</th>
+                    <th>FROM DATE</th>
+                    <th>TO DATE</th>
+                    <th>DAYS</th>
+                    <th>SOURCE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rangeReportLoading ? (
+                    <tr>
+                      <td className="empty" colSpan={10}>
+                        Loading saved leave…
+                      </td>
+                    </tr>
+                  ) : rangeReportRows.length ? (
+                    rangeReportRows.map((r, index) => (
+                      <tr key={`${r.employee_id}-${r.from_date}-${r.to_date}-${r.source}-${index}`}>
+                        <td>{r.employee_id}</td>
+                        <td>{r.real_name}</td>
+                        <td>{r.telegram_group}</td>
+                        <td>{r.region}</td>
+                        <td>{r.dealer}</td>
+                        <td>
+                          <span className="status danger">{r.leave_type}</span>
+                        </td>
+                        <td>{r.from_date}</td>
+                        <td>{r.to_date}</td>
+                        <td>{r.days}</td>
+                        <td>{r.source}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td className="empty" colSpan={10}>
+                        No saved AL records found for this date range.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-    <section className="panel al-schedule al-schedule-stable" aria-label="Schedule annual leave"><div className="al-schedule-title"><h3>Schedule annual leave</h3></div>
-    <section className="al-range-card">
-      <div className="al-range-heading"><div><h3>Schedule leave for employees</h3></div><span className="al-range-limit">1–90 days</span></div>
-      <div className="al-step-label"><span>1</span><div><b>Choose dates and leave type</b></div></div>
-      <div className="al-range-controls">
-        <label className="field"><span>From date</span><input type="date" value={rangeFrom} onChange={e=>{setRangeFrom(e.target.value);setRangeReportLoaded(false)}}/></label>
-        <label className="field"><span>To date</span><input type="date" value={rangeTo} onChange={e=>{setRangeTo(e.target.value);setRangeReportLoaded(false)}}/></label>
-        <label className="field"><span>Leave type</span><select value={rangeAttendance} onChange={e=>setRangeAttendance(e.target.value)}><option value="AL Range">AL Range (full day)</option><option value="AL Morning">AL Morning</option><option value="AL Afternoon">AL Afternoon</option></select></label>
-        <button className="secondary al-view-button" disabled={rangeReportLoading||savingRange} onClick={loadRangeReport}>{rangeReportLoading?"Loading saved leave…":"View saved leave"}</button>
-      </div>
-      <div className="al-step-label"><span>2</span><div><b>Find and select employees</b></div></div>
-      <div className="al-employee-toolbar"><label className="field al-find-employee"><span>Search Employee</span><input value={employeeSearch} onChange={e=>setEmployeeSearch(e.target.value)} placeholder="Employee ID, name, Telegram Group, Region, Dealer…"/></label><div className="al-selection-tools"><span className="al-selected-count" aria-live="polite">{selectedEmployees.length>0?`${selectedEmployees.length} selected`:"No employees selected"}</span><button type="button" className="secondary al-clear-button" disabled={!selectedEmployees.length||savingRange} onClick={()=>setSelectedEmployees([])}>Clear all selected</button></div></div>
-      <div className="panel table-wrap al-selector-wrap">
-        <table className="data-table"><thead><tr>
-          <th>Select</th>
-          <th>Employee ID</th><th>Name</th><th>Telegram Group</th><th>Region</th><th>Dealer</th>
-        </tr></thead><tbody>
-          {loading?<tr><td className="empty" colSpan={6}>Loading employees…</td></tr>:employeeChoices.map(r=><tr key={`range-${r.id}`}>
-            <td><input type="checkbox" aria-label={'Select '+r.name+' for AL range'} checked={selectedEmployees.includes(r.id)} onChange={e=>toggleEmployee(r.id,e.target.checked)}/></td>
-            <td>{r.id}</td><td>{r.name}</td><td>{r.telegramGroup}</td><td><span className="region-tag">{r.region}</span></td><td><span className="dealer-tag">{r.dealer}</span></td>
-          </tr>)}
-          {!loading&&!employeeChoices.length&&<tr><td className="empty" colSpan={6}>No employees match this search and region/dealer selection.</td></tr>}
-        </tbody></table>
-      </div>
-      <div className="al-range-footer">
-        <div className="al-apply-summary"><span className="al-step-number">3</span><span><b>Apply leave</b><small>{selectedEmployees.length?`${selectedEmployees.length} employee${selectedEmployees.length===1?"":"s"} · ${rangeFrom} to ${rangeTo}`:"Select at least one employee above"}</small></span></div>
-        <button className="primary al-apply-button" disabled={savingRange||loading||!selectedEmployees.length} onClick={applyRange}>{savingRange?"Saving…":rangeAttendance==="AL Range"?"Apply AL Range":"Apply AL"}</button>
-      </div>
-    </section></section>
-    {success&&<p className="al-success" role="status">{success}</p>}
-    {(rangeReportLoaded||rangeReportLoading)&&<div className="panel table-wrap al-report-card">
-      <div className="panel-head"><div><h2>Saved leave</h2></div></div>
-      <table className="data-table"><thead><tr><th>Employee ID</th><th>Name</th><th>Telegram Group</th><th>Region</th><th>Dealer</th><th>AL Type</th><th>From Date</th><th>To Date</th><th>Days</th><th>Source</th></tr></thead><tbody>
-        {rangeReportLoading?<tr><td className="empty" colSpan={10}>Loading AL range…</td></tr>:rangeReportRows.map((r,index)=><tr key={`${r.employee_id}-${r.from_date}-${r.to_date}-${r.source}-${index}`}><td>{r.employee_id}</td><td>{r.real_name}</td><td>{r.telegram_group}</td><td>{r.region}</td><td>{r.dealer}</td><td><span className="status danger">{r.leave_type}</span></td><td>{r.from_date}</td><td>{r.to_date}</td><td>{r.days}</td><td>{r.source}</td></tr>)}
-        {!rangeReportLoading&&rangeReportRows.length===0&&<tr><td className="empty" colSpan={10}>No saved AL records found for this date range.</td></tr>}
-      </tbody></table>
-    </div>}
-    <div className="metrics al-metrics">
-      <Metric name="Master Sales" value={loading?"Loading…":error?"—":attendanceFiltered.length} />
-      <Metric name="Present / Active" value={loading?"Loading…":error?"—":attendanceFiltered.filter(r=>r.hasCheckin&&!r.fullDayConflict).length} />
-      <Metric name="Annual Leave (AL)" value={loading?"Loading…":error?"—":alCount} />
-      <Metric name="Not Reported" value={loading?"Loading…":error?"—":attendanceFiltered.filter(r=>r.attendance==="Not Reported").length} />
-    </div>
-    <div className="al-subsection-heading al-attendance-list-title"><div><h3>Employee attendance</h3></div></div>
-    <div className="panel table-wrap" style={{marginTop:16}}><table className="data-table"><thead><tr><th>Region</th><th>Dealer</th><th>Telegram Group</th><th>Employee ID</th><th>Name</th><th>Position</th><th>Attendance</th><th>Check-in</th><th>Evidence / source</th><th>Set bot leave</th></tr></thead><tbody>
-      {loading ? <tr><td className="empty" colSpan={10}>Loading attendance…</td></tr> : attendanceFiltered.map(r=><tr key={r.id}><td><span className="region-tag">{r.region}</span></td><td><span className="dealer-tag">{r.dealer}</span></td><td>{r.telegramGroup||`${r.region}-${r.dealer}`}</td><td>{r.id}</td><td>{r.name}</td><td>{r.role}</td><td><span className={'status '+(r.leaveStatus?'danger':'')+(r.fullDayConflict?' status-conflict':'')}>{r.fullDayConflict?'AL Full Day · Check-in conflict':r.attendance}</span></td><td>{r.hasCheckin?"Yes":"No"}</td><td>{r.source}</td><td><select aria-label={'Set bot leave for '+r.name} value={r.leaveStatus||"Clear dashboard AL"} onChange={e=>setAttendance(r.id,e.target.value)}><option>Clear dashboard AL</option><option>AL Full Day</option><option>AL Morning</option><option>AL Afternoon</option></select></td></tr>)}
-    </tbody></table>{!loading&&!error&&attendanceFiltered.length===0&&<div className="empty">No matching employees.</div>}</div>
-    
-  </div>;
+  );
 }
 
 export default function App() {
