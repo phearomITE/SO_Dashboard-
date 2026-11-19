@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -75,7 +76,9 @@ def test_report_image_roundtrip():
         engine.dispose()
 
 
-def test_pg_auth_cache_email_flow_without_redis():
+def test_pg_auth_cache_email_flow_without_redis(monkeypatch):
+    for k in ('BREVO_API_KEY', 'RESEND_API_KEY', 'EMAIL_WEBHOOK_URL'):
+        monkeypatch.delenv(k, raising=False)
     engine = create_engine('sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool)
     store = AuthStore(engine)
     store.initialize()
@@ -127,5 +130,131 @@ def test_pg_auth_cache_email_flow_without_redis():
                 raise AssertionError('Expected 401 after logout')
             except HTTPException as exc:
                 assert exc.status_code == 401
+    finally:
+        engine.dispose()
+
+
+class _FakeHttpResp:
+    def __init__(self, body='{}'):
+        self._body = body.encode('utf-8')
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self, _n=-1):
+        return self._body
+
+
+def test_https_email_brevo_provider(monkeypatch):
+    for k in ('BREVO_API_KEY', 'RESEND_API_KEY', 'EMAIL_WEBHOOK_URL', 'EMAIL_FROM', 'SMTP_HOST', 'SMTP_FROM'):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv('BREVO_API_KEY', 'xkeysib-secret')
+    monkeypatch.setenv('SMTP_FROM', 'sender@example.com')
+    assert auth.sender_configuration_error() is None
+
+    captured = {}
+
+    def fake_urlopen(req, timeout=0):
+        captured['url'] = req.full_url
+        captured['headers'] = {k.lower(): v for k, v in req.header_items()}
+        captured['body'] = json.loads(req.data.decode('utf-8'))
+        return _FakeHttpResp('{"messageId":"1"}')
+
+    with patch.object(auth.urllib.request, 'urlopen', side_effect=fake_urlopen):
+        auth.send_code('user@example.com', '123456')
+
+    assert captured['url'] == 'https://api.brevo.com/v3/smtp/email'
+    assert captured['headers']['api-key'] == 'xkeysib-secret'
+    assert captured['body']['sender']['email'] == 'sender@example.com'
+    assert captured['body']['to'] == [{'email': 'user@example.com'}]
+    assert '123456' in captured['body']['textContent']
+
+
+def test_https_email_resend_provider(monkeypatch):
+    for k in ('BREVO_API_KEY', 'RESEND_API_KEY', 'EMAIL_WEBHOOK_URL', 'EMAIL_FROM', 'SMTP_HOST', 'SMTP_FROM'):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv('RESEND_API_KEY', 're_secret_123')
+    assert auth.sender_configuration_error() is None
+
+    captured = {}
+
+    def fake_urlopen(req, timeout=0):
+        captured['url'] = req.full_url
+        captured['headers'] = {k.lower(): v for k, v in req.header_items()}
+        captured['body'] = json.loads(req.data.decode('utf-8'))
+        return _FakeHttpResp('{"id":"abc"}')
+
+    with patch.object(auth.urllib.request, 'urlopen', side_effect=fake_urlopen):
+        auth.send_code('user@example.com', '654321')
+
+    assert captured['url'] == 'https://api.resend.com/emails'
+    assert captured['headers']['authorization'] == 'Bearer re_secret_123'
+    assert captured['body']['from'] == 'onboarding@resend.dev'
+    assert captured['body']['to'] == ['user@example.com']
+    assert '654321' in captured['body']['text']
+
+
+def test_https_email_webhook_provider(monkeypatch):
+    for k in ('BREVO_API_KEY', 'RESEND_API_KEY', 'EMAIL_WEBHOOK_URL', 'EMAIL_WEBHOOK_SECRET', 'SMTP_HOST', 'SMTP_FROM'):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv('EMAIL_WEBHOOK_URL', 'http://insecure.example.com/exec')
+    assert 'https://' in (auth.sender_configuration_error() or '')
+
+    monkeypatch.setenv('EMAIL_WEBHOOK_URL', 'https://script.google.com/macros/s/abc/exec')
+    monkeypatch.setenv('EMAIL_WEBHOOK_SECRET', 'relay-secret')
+    assert auth.sender_configuration_error() is None
+
+    captured = {}
+
+    def fake_ok(req, timeout=0):
+        captured['url'] = req.full_url
+        captured['body'] = json.loads(req.data.decode('utf-8'))
+        return _FakeHttpResp('{"ok":true}')
+
+    with patch.object(auth.urllib.request, 'urlopen', side_effect=fake_ok):
+        auth.send_code('user@example.com', '777888')
+
+    assert captured['url'] == 'https://script.google.com/macros/s/abc/exec'
+    assert captured['body']['to'] == 'user@example.com'
+    assert captured['body']['secret'] == 'relay-secret'
+    assert '777888' in captured['body']['text']
+
+    with patch.object(auth.urllib.request, 'urlopen', return_value=_FakeHttpResp('{"ok":false}')):
+        try:
+            auth.send_code('user@example.com', '777888')
+            raise AssertionError('Expected 503 when webhook returns ok=false')
+        except HTTPException as exc:
+            assert exc.status_code == 503
+
+
+def test_render_smtp_blocked_message(monkeypatch):
+    for k in ('BREVO_API_KEY', 'RESEND_API_KEY', 'EMAIL_WEBHOOK_URL'):
+        monkeypatch.delenv(k, raising=False)
+    engine = create_engine('sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool)
+    store = AuthStore(engine)
+    store.initialize()
+    kv = PgAuthCache(engine)
+    app_obj = SimpleNamespace(state=SimpleNamespace(redis=None, auth_kv=kv, auth_store=store))
+    req = SimpleNamespace(app=app_obj, client=SimpleNamespace(host='127.0.0.1'), headers={}, cookies={})
+    env = {
+        'RENDER': 'true',
+        'DASHBOARD_ADMIN_TOKEN': 'z' * 48,
+        'SMTP_HOST': 'smtp.gmail.com',
+        'SMTP_FROM': 'sender@gmail.com',
+        'SMTP_USERNAME': 'sender@gmail.com',
+        'SMTP_PASSWORD': 'app-password',
+    }
+    try:
+        with patch.dict(os.environ, env), patch.object(auth, 'send_code', side_effect=OSError('Network unreachable')):
+            try:
+                auth.request_code(auth.EmailBody(email='user@example.com'), req, Response())
+                raise AssertionError('Expected 503 on Render SMTP failure')
+            except HTTPException as exc:
+                assert exc.status_code == 503
+                assert 'Render Free blocks outbound SMTP ports' in exc.detail
+                assert 'EMAIL_WEBHOOK_URL' in exc.detail
     finally:
         engine.dispose()

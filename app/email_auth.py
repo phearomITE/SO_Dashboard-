@@ -7,6 +7,8 @@ import re
 import secrets
 import smtplib
 import ssl
+import urllib.error
+import urllib.request
 from email.message import EmailMessage
 from datetime import datetime,timedelta,timezone
 from urllib.parse import urlsplit
@@ -57,8 +59,30 @@ def client_for(request):
         raise HTTPException(503, "Sign-in is temporarily unavailable. Please try again later.")
     return client
 
+def _https_provider():
+    if os.getenv('BREVO_API_KEY', '').strip():
+        return 'brevo'
+    if os.getenv('RESEND_API_KEY', '').strip():
+        return 'resend'
+    if os.getenv('EMAIL_WEBHOOK_URL', '').strip():
+        return 'webhook'
+    return None
+
 def sender_configuration_error():
     """Return actionable setup guidance without exposing credentials."""
+    provider = _https_provider()
+    if provider == 'brevo':
+        sender = (os.getenv('EMAIL_FROM') or os.getenv('SMTP_FROM') or '').strip()
+        if not sender or 'your-sender' in sender.lower():
+            return "Brevo email delivery needs a verified sender address in EMAIL_FROM or SMTP_FROM."
+        return None
+    if provider == 'resend':
+        return None
+    if provider == 'webhook':
+        url = os.getenv('EMAIL_WEBHOOK_URL', '').strip()
+        if not url.startswith('https://'):
+            return "EMAIL_WEBHOOK_URL must start with https://."
+        return None
     values = {key:os.getenv(key, '').strip() for key in ('SMTP_HOST','SMTP_FROM','SMTP_USERNAME','SMTP_PASSWORD')}
     if any(marker in value.lower() for value in values.values() for marker in ('your-sender','your-google-app-password','your-app-password','your-smtp-password')):
         return "Email delivery uses example credentials. The dashboard owner must replace them with a real sender email and SMTP App Password in .env, then restart the dashboard."
@@ -84,16 +108,84 @@ def require_sender_configuration():
     problem=sender_configuration_error()
     if problem:raise HTTPException(503,problem)
 
+def _send_code_https(provider, email, subject, body_text):
+    if provider == 'brevo':
+        url = 'https://api.brevo.com/v3/smtp/email'
+        sender = (os.getenv('EMAIL_FROM') or os.getenv('SMTP_FROM') or '').strip()
+        headers = {
+            'api-key': os.environ['BREVO_API_KEY'].strip(),
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'SO-Alert-Dashboard/1.0',
+        }
+        payload = {
+            'sender': {'name': 'SO Alert Dashboard', 'email': sender},
+            'to': [{'email': email}],
+            'subject': subject,
+            'textContent': body_text,
+        }
+    elif provider == 'resend':
+        url = 'https://api.resend.com/emails'
+        sender = (os.getenv('EMAIL_FROM') or os.getenv('SMTP_FROM') or 'onboarding@resend.dev').strip()
+        headers = {
+            'Authorization': 'Bearer ' + os.environ['RESEND_API_KEY'].strip(),
+            'Content-Type': 'application/json',
+            'User-Agent': 'SO-Alert-Dashboard/1.0',
+        }
+        payload = {
+            'from': sender,
+            'to': [email],
+            'subject': subject,
+            'text': body_text,
+        }
+    else:
+        url = os.environ['EMAIL_WEBHOOK_URL'].strip()
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'SO-Alert-Dashboard/1.0',
+        }
+        payload = {
+            'to': email,
+            'subject': subject,
+            'text': body_text,
+            'secret': os.getenv('EMAIL_WEBHOOK_SECRET', '').strip(),
+        }
+
+    req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read(16384).decode('utf-8', errors='replace')
+            if provider == 'webhook' and raw.strip():
+                try:
+                    parsed = json.loads(raw)
+                except ValueError:
+                    parsed = None
+                if isinstance(parsed, dict) and parsed.get('ok') is False:
+                    raise HTTPException(503, "The HTTPS email relay rejected the request. Check EMAIL_WEBHOOK_SECRET and script permissions.")
+    except HTTPException:
+        raise
+    except urllib.error.HTTPError as exc:
+        raise HTTPException(503, f"HTTPS email provider returned HTTP {exc.code}. Check your API key, sender email, or webhook configuration.") from None
+    except (urllib.error.URLError, OSError):
+        raise HTTPException(503, "The dashboard could not reach the HTTPS email provider. Check network access and provider URL.") from None
+
 def send_code(email, code):
     require_sender_configuration()
+    subject = 'Your SO Alert Dashboard sign-in code'
+    body_text = f"Your SO Alert Dashboard verification code is: {code}\n\nIt expires in 10 minutes and can be used once. Do not share this code.\nIf you did not request this, you can ignore this email."
+    provider = _https_provider()
+    if provider is not None:
+        _send_code_https(provider, email, subject, body_text)
+        return
     mode = os.getenv('SMTP_SECURITY', 'starttls').lower()
     if mode not in ('starttls', 'ssl'):
         raise HTTPException(503, "Email sender must use TLS.")
     msg = EmailMessage()
-    msg['Subject'] = 'Your SO Alert Dashboard sign-in code'
+    msg['Subject'] = subject
     msg['From'] = os.environ['SMTP_FROM']
     msg['To'] = email
-    msg.set_content(f"Your SO Alert Dashboard verification code is: {code}\n\nIt expires in 10 minutes and can be used once. Do not share this code.\nIf you did not request this, you can ignore this email.")
+    msg.set_content(body_text)
     context = ssl.create_default_context()
     host = os.environ['SMTP_HOST'].strip()
     port = int(os.getenv('SMTP_PORT', '465' if mode == 'ssl' else '587'))
@@ -156,6 +248,8 @@ def request_code(body: EmailBody, request: Request, response: Response):
             raise HTTPException(503, "The email provider rejected the sender credentials. The dashboard owner must check SMTP_USERNAME and SMTP_PASSWORD. For Gmail, use a Google App Password, then restart the dashboard.") from None
         except (OSError, smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected):
             client.delete(key, cooldown)
+            if os.getenv('RENDER'):
+                raise HTTPException(503, "Render Free blocks outbound SMTP ports (25, 465, 587). Configure EMAIL_WEBHOOK_URL, BREVO_API_KEY, or RESEND_API_KEY in Render Environment for HTTPS email delivery.") from None
             raise HTTPException(503, "The dashboard could not connect to the email provider. The owner must check SMTP_HOST, SMTP_PORT, TLS settings and network access.") from None
         except Exception:
             client.delete(key, cooldown)
