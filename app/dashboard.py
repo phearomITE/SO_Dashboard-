@@ -10,7 +10,7 @@ from pathlib import Path
 import os
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from sqlalchemy import text
@@ -148,9 +148,11 @@ async def lifespan(_app):
             after_data JSONB,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )"""))
-    from app.auth_store import AuthStore
+    db.ReportImage.__table__.create(db.engine, checkfirst=True)
+    from app.auth_store import AuthStore, PgAuthCache
     _app.state.auth_store = AuthStore(db.engine)
     _app.state.auth_store.initialize()
+    _app.state.auth_kv = None
     _app.state.redis = None
     redis_url = os.getenv("REDIS_URL", "").strip()
     if redis_url:
@@ -162,7 +164,10 @@ async def lifespan(_app):
             _app.state.redis = client
             logging.getLogger(__name__).info("Dashboard Redis cache/rate limiter ready")
         except Exception:
-            logging.getLogger(__name__).exception("Redis unavailable; dashboard will use PostgreSQL without cache")
+            logging.getLogger(__name__).warning("Redis unavailable; using PostgreSQL auth store without Redis cache")
+    if _app.state.redis is None:
+        _app.state.auth_kv = PgAuthCache(db.engine)
+        logging.getLogger(__name__).info("Dashboard authentication store using PostgreSQL")
     try:
         station_count = len(load_dealers())
         logging.getLogger(__name__).info("Dashboard dealer map cache ready (%s stations)", station_count)
@@ -186,8 +191,22 @@ from app.gp_reports import router as gp_router
 app.include_router(gp_router)
 app.mount("/assets", StaticFiles(directory=ROOT / "app" / "static" / "admin" / "assets", check_dir=False), name="admin-assets")
 app.mount("/static", StaticFiles(directory=ROOT / "app" / "static"), name="static")
-app.mount("/media/reports", StaticFiles(directory=ROOT / "data" / "report_images", check_dir=False),
-          name="report-images")
+
+
+@app.get("/media/reports/{filename}")
+def report_image(filename: str):
+    safe_name = Path(filename).name
+    if not safe_name or safe_name != filename or Path(safe_name).suffix.lower() not in {".jpg", ".jpeg", ".png", ".webp"}:
+        raise HTTPException(404, "Image not found")
+    disk_path = ROOT / "data" / "report_images" / safe_name
+    if disk_path.is_file():
+        return FileResponse(disk_path, headers={"Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff"})
+    stored = db.load_report_image(db.engine, safe_name)
+    if stored:
+        content, media_type = stored
+        return Response(content=content, media_type=media_type,
+                        headers={"Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff"})
+    raise HTTPException(404, "Image not found")
 
 
 @app.get("/", response_class=HTMLResponse)

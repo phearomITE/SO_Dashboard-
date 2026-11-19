@@ -18,5 +18,5 @@ RUN python -m compileall -q app && python -c "import app.dashboard"
 COPY --from=admin-ui /app/static/admin ./app/static/admin
 COPY data ./data
 ENV PYTHONUNBUFFERED=1 PYTHONUTF8=1
-CMD ["python", "-m", "app.main"]
+CMD ["python", "-m", "app.cloud_entry"]
 

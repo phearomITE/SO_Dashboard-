@@ -1,6 +1,7 @@
 services:
   so-bot:
     build: .
+    command: ["python", "-m", "app.main"]
     restart: unless-stopped
     env_file: .env
     environment:

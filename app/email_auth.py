@@ -52,7 +52,7 @@ def role_for(email):
     return "admin" if email.casefold() in admins else "viewer"
 
 def client_for(request):
-    client = getattr(request.app.state, 'redis', None)
+    client = getattr(request.app.state, 'redis', None) or getattr(request.app.state, 'auth_kv', None)
     if client is None:
         raise HTTPException(503, "Sign-in is temporarily unavailable. Please try again later.")
     return client

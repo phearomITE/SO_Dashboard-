@@ -22,20 +22,12 @@ if errorlevel 1 (
   goto fail
 )
 
-echo [1/3] Checking Ollama / Hermes GPU...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0START_HERMES_IF_AVAILABLE.ps1"
-if errorlevel 1 echo [WARN] Hermes is not ready. See above; ngrok setup will continue.
-
-echo [2/3] Starting PostgreSQL, Redis, Bot, Dashboard, ngrok...
+echo [1/2] Starting PostgreSQL, Redis, Bot, Dashboard, ngrok...
 REM --profile public activates the ngrok container; --remove-orphans clears stale services.
 docker compose --profile public up -d --build --remove-orphans postgres redis so-bot dashboard ngrok
 if errorlevel 1 goto fail
 
-echo Checking Docker-to-Hermes connectivity...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0CHECK_HERMES_DOCKER.ps1"
-if errorlevel 1 echo [WARN] Hermes inference is degraded. Check Hermes diagnostics.
-
-echo [3/3] Reading ngrok HTTPS public URL...
+echo [2/2] Reading ngrok HTTPS public URL...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0WAIT_NGROK_TUNNEL.ps1"
 if errorlevel 1 goto fail
 

@@ -366,25 +366,8 @@ async function refreshEmployeeReasons(profile){
   const verified=[...new Set(matched.filter(x=>x.is_reason===true&&x.summary).map(x=>String(x.summary).trim()))].slice(0,5);
   const pending=matched.filter(x=>x.is_reason===null||x.is_reason===undefined);
   const pendingUnique=[...new Map(pending.filter(x=>x.message).map(x=>[String(x.message).trim(),x])).values()].slice(0,5);
-  if(pendingUnique.length){
-    const jobKey=[$('date').value,id,uid].join(':');
-    if(!reasonBackfills.has(jobKey)){
-      reasonBackfills.add(jobKey);
-      const jobParams=new URLSearchParams({day:$('date').value});
-      if(profile.region)jobParams.set('region',profile.region);
-      if(profile.dealer)jobParams.set('dealer',profile.dealer);
-      if(id)jobParams.set('employee_id',id);
-      fetch('/api/v1/admin/reasons/reprocess?'+jobParams,{method:'POST',headers:{Authorization:'Bearer '+token}})
-       .then(async result=>{
-         if(!result.ok){const err=await result.json().catch(()=>({}));throw Error(err.detail||'Hermes unavailable')}
-         // Background task may take longer than a single page refresh.
-         setTimeout(()=>{if(request===employeeReasonRequest)refreshEmployeeReasons(profile)},12000);
-       })
-       .catch(error=>{if(request===employeeReasonRequest){const note=document.createElement('p');note.className='reason-status';note.textContent='Hermes status: '+error.message;node.append(note)}});
-    }
-  }
   const items=verified.map(r=>'<li>'+esc(r)+'</li>').join('');
-  const underReview=pendingUnique.map(x=>'<li class="reason-pending"><span class="reason-status">Pending AI/review: </span>'+esc(String(x.message).trim())+'</li>').join('');
+  const underReview=pendingUnique.map(x=>'<li class="reason-pending"><span class="reason-status">Pending review: </span>'+esc(String(x.message).trim())+'</li>').join('');
   node.innerHTML='<h4>Summary Reason <small>'+verified.length+' verified · '+pendingUnique.length+' pending</small></h4>'+
     (items?'<ol>'+items+'</ol>':'')+
     (underReview?'<ol>'+underReview+'</ol>':'')+

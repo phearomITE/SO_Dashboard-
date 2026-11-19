@@ -1273,17 +1273,21 @@ async def backfill_geo_job(context):
 
 async def ocr_event(context,eid,msg,at):
     async with context.application.bot_data['ocr_sem']:
+        filename=f'{msg.chat_id}_{msg.message_id}.jpg'
+        image_bytes=b''
         try:
             photo=msg.photo[-1] if msg.photo else msg.document
-            # Keep one durable report-image copy for warehouse/Power BI links.
+            # Keep a local scratch copy for OCR and persist bytes in PostgreSQL.
             image_dir=DATA/'report_images';image_dir.mkdir(parents=True,exist_ok=True)
-            path=image_dir/f'{msg.chat_id}_{msg.message_id}.jpg'
+            path=image_dir/filename
             f=await photo.get_file();await f.download_to_drive(path)
+            if path.exists():image_bytes=path.read_bytes()
             result=await asyncio.to_thread(scan,path,at)
         except Exception as exc:
             log.exception('Photo OCR failed event=%s',eid)
             result={'status':'Review','ocr_issue':f'Photo download failed: {type(exc).__name__}'}
         with db.session() as s:
+            if image_bytes:db.save_report_image(s,filename,msg.chat_id,msg.message_id,image_bytes)
             e=s.get(Event,eid)
             if e:e.data={**e.data,**result,'ocr_done':True}
         await auto_refresh_warehouse(context.application,'photo_ocr')

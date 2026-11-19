@@ -221,26 +221,61 @@ class Reconciliation(Base):
     difference=mapped_column(Integer)
     status=mapped_column(String(20),index=True)
     checked_at=mapped_column(DateTime,index=True)
+class ReportImage(Base):
+    __tablename__='so_report_images_v1'
+    filename=mapped_column(String(120),primary_key=True)
+    chat_id=mapped_column(BigInteger,index=True)
+    message_id=mapped_column(BigInteger,index=True)
+    content_type=mapped_column(String(60),default='image/jpeg')
+    data=mapped_column(LargeBinary)
+    size_bytes=mapped_column(Integer)
+    created_at=mapped_column(DateTime,index=True)
 
 engine=None
 Session=None
 lock_connection=None
 
 def now(): return datetime.now(TZ).replace(tzinfo=None)
+def _normalize_database_url(raw):
+    value=(raw or '').strip()
+    if value.startswith('postgres://'):return 'postgresql+psycopg2://'+value[len('postgres://'):]
+    if value.startswith('postgresql://'):return 'postgresql+psycopg2://'+value[len('postgresql://'):]
+    return value
+
 def database_url():
-    return os.getenv('DATABASE_URL') or URL.create('postgresql+psycopg2',username=os.getenv('DB_USER','postgres'),password=os.getenv('DB_PASSWORD',''),host=os.getenv('DB_HOST') or '127.0.0.1',port=int(os.getenv('DB_PORT','5435')),database=os.getenv('DB_NAME','SA_Alert'))
+    env_url=_normalize_database_url(os.getenv('DATABASE_URL'))
+    return env_url or URL.create('postgresql+psycopg2',username=os.getenv('DB_USER','postgres'),password=os.getenv('DB_PASSWORD',''),host=os.getenv('DB_HOST') or '127.0.0.1',port=int(os.getenv('DB_PORT','5435')),database=os.getenv('DB_NAME','SA_Alert'))
 
 def new_engine(url=None):
     from sqlalchemy.engine import make_url
-    target=make_url(url or database_url())
-    options={'connect_timeout':5} if target.get_backend_name()=='postgresql' else {}
+    target=make_url(_normalize_database_url(url) if isinstance(url,str) else (url or database_url()))
+    options={'connect_timeout':max(3,int(os.getenv('DB_CONNECT_TIMEOUT','10')))} if target.get_backend_name()=='postgresql' else {}
     pool_options={}
     if target.get_backend_name()=='postgresql':
-        # Concurrent traffic from 65 Telegram groups must not queue behind
-        # SQLAlchemy's small default pool. Pre-ping safely replaces stale
-        # connections after Docker/PostgreSQL restarts.
-        pool_options={'pool_size':20,'max_overflow':40,'pool_timeout':30,'pool_recycle':1800}
+        external=bool((os.getenv('DATABASE_URL') or '').strip())
+        pool_size=int(os.getenv('DB_POOL_SIZE','5' if external else '20'))
+        max_overflow=int(os.getenv('DB_MAX_OVERFLOW','10' if external else '40'))
+        pool_options={'pool_size':pool_size,'max_overflow':max_overflow,'pool_timeout':30,'pool_recycle':1800}
     return create_engine(target,pool_pre_ping=True,connect_args=options,**pool_options)
+
+def save_report_image(s,filename,chat_id,message_id,content,content_type='image/jpeg'):
+    """Persist downloaded report image bytes in PostgreSQL for durable cloud serving."""
+    if not content:return
+    existing=s.get(ReportImage,filename)
+    if existing:
+        existing.chat_id=chat_id;existing.message_id=message_id
+        existing.content_type=content_type;existing.data=content
+        existing.size_bytes=len(content);existing.created_at=now()
+    else:
+        s.add(ReportImage(filename=filename,chat_id=chat_id,message_id=message_id,
+                          content_type=content_type,data=content,size_bytes=len(content),created_at=now()))
+
+def load_report_image(target_engine,filename):
+    """Fetch stored report image bytes and media type from PostgreSQL."""
+    if target_engine is None:return None
+    with target_engine.connect() as conn:
+        row=conn.execute(select(ReportImage.data,ReportImage.content_type).where(ReportImage.filename==filename)).first()
+    return (bytes(row[0]),row[1] or 'image/jpeg') if row and row[0] else None
 
 def probe_connection():
     # Diagnostics must not create tables or modify data.

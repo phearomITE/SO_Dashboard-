@@ -23,6 +23,6 @@ def test_outlet_popup_does_not_embed_fullscreen_broken_image():
 
 def test_employee_summary_shows_pending_and_position():
     html = DASHBOARD.read_text(encoding='utf-8')
-    assert 'Pending AI/review:' in html
+    assert 'Pending review:' in html
     assert 'Position: ${esc(profile.position' in html
     assert 'String(x.telegram_id||\'\').trim()===uid' in html
