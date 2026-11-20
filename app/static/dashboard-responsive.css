@@ -5,3 +5,16 @@ html.embedded,html.embedded body{min-width:0;max-width:100%;box-sizing:border-bo
 @media(max-width:400px){html.embedded .filters .filter,html.embedded .filters .filter:first-child,html.embedded .filters .filter:nth-child(5),html.embedded .filters .filter:nth-child(6),html.embedded .filters .filter:nth-child(7){flex-basis:105px}html.embedded .filters .employee-filter{flex-basis:100%}html.embedded .employee-profile{grid-template-columns:32px minmax(0,1fr)}.route-stop-meta{font-size:10px}.outlet-detail__rows>div{grid-template-columns:88px minmax(0,1fr)!important}}
 @media(pointer:coarse){html.embedded .filter input,html.embedded .filter select{height:40px;min-height:40px;font-size:16px}html.embedded .filters button{min-height:40px;height:auto}html.embedded .filters button.employee-suggestion{min-height:52px}html.embedded .filter label{font-size:11px}.leaflet-popup.outlet-map-popup .leaflet-popup-close-button{width:32px!important;height:32px!important;line-height:32px!important}.outlet-detail__header{padding-right:42px!important}.outlet-detail__directions{min-height:40px;display:flex!important;align-items:center;justify-content:center}}
 @media(min-width:851px) and (max-height:550px){html.embedded body{overflow-y:auto;grid-template-rows:auto auto auto 300px;height:auto;min-height:100%}html.embedded .mapwrap{min-height:300px}html.embedded .side{max-height:500px}}
+
+@media(max-width:850px){
+ html.embedded .main{display:grid;grid-template-columns:minmax(0,1fr);height:auto;min-height:0}
+ html.embedded .filters{flex-wrap:wrap}
+ html.embedded .kpi .label{font-size:10px}html.embedded .kpi .value{font-size:18px}
+ html.embedded .mapwrap{height:clamp(300px,58dvh,550px);min-height:300px}
+ html.embedded .journey-panel{padding:12px;max-height:none;min-height:200px}
+ html.embedded .map-key{bottom:22px}
+}
+@media(pointer:coarse){
+ html.embedded .filter input,html.embedded .filter select,html.embedded .filters button{min-height:44px;height:44px}
+ html.embedded .filters .filter input,html.embedded .filters .filter select{font-size:16px}
+}

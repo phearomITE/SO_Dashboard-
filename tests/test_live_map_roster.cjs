@@ -1,0 +1,17 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const html=fs.readFileSync('app/static/dashboard.html','utf8');
+const populate=html.match(/function populate\(\)\{[\s\S]*?(?=\nfunction )/)[0];
+const fields=Object.fromEntries(['region','dealer','province','district','commune'].map(id=>[id,{value:''}]));
+const active={telegram_id:1,employee_id:'001',real_name:'Visited',region:'R1',dealer:'CA1'};
+const unvisited={telegram_id:2,employee_id:'002',real_name:'No visit',region:'R1',dealer:'CA1'};
+const other={telegram_id:3,employee_id:'003',real_name:'Other',region:'R2',dealer:'KDL1'};
+const context=vm.createContext({raw:{checkins:[active],dealers:[],roster:[active,unvisited,other]},employeeChoices:[], $:id=>fields[id],option:()=>{}});
+vm.runInContext(populate+';populate()',context);
+assert.deepEqual(Array.from(context.employeeChoices,x=>x.employee_id).sort(),['001','002','003']);
+fields.region.value='R1';vm.runInContext('populate()',context);
+assert.deepEqual(Array.from(context.employeeChoices,x=>x.employee_id).sort(),['001','002']);
+context.raw.checkins=[];vm.runInContext('populate()',context);
+assert.equal(context.employeeChoices.length,2);
+console.log('PASS: roster employees remain searchable with partial or no check-ins; region scope retained');

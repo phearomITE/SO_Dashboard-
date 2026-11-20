@@ -171,7 +171,7 @@ function Header({ page, apiHealth, onOpenAlert }) {
         </div>
         <span className={`sa-conn-pill ${apiHealth !== "ready" ? "is-warn" : ""}`}>
           <i aria-hidden="true" />
-          {apiHealth === "ready" ? "Bot online" : apiHealth === "checking" ? "Checking…" : "Unavailable"}
+          {apiHealth === "ready" ? "Database connected" : apiHealth === "checking" ? "Checking…" : "Unavailable"}
         </span>
       </div>
     </header>

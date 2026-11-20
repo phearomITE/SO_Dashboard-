@@ -500,7 +500,7 @@ def snapshot(day: date | None = Query(default=None)):
     current = datetime.now(ZoneInfo("Asia/Phnom_Penh")).date()
     selected = day or current
     redis_client = getattr(app.state, "redis", None)
-    cache_key = f"so-alert:dashboard:snapshot:v3:{selected.isoformat()}"
+    cache_key = f"so-alert:dashboard:snapshot:v4:{selected.isoformat()}"
     cached = _redis_json_response(redis_client, cache_key)
     if cached is not None:
         return cached
@@ -584,6 +584,34 @@ def snapshot(day: date | None = Query(default=None)):
     """, {"batch": active_plan_batch, "day": selected.isoformat()}) if active_plan_batch else []
     # Original workbook is the source of truth, including unscheduled rows.
     plan_targets=_plan_outlet_targets(active_plan_batch)
+    roster_rows = _query_rows("""SELECT r.employee AS employee_id, r.uid AS telegram_id, r.name AS real_name,
+               r.region, r.dealer, coalesce(r.position, 'SO') AS position
+        FROM so_roster_v1 r
+        WHERE r.active = 1 AND upper(trim(coalesce(r.position, 'SO'))) IN ('SO', 'SS')
+        ORDER BY r.region, r.dealer, r.name, r.employee
+    """)
+    # Take the newest usable location from either source. A nonempty but stale
+    # warehouse must not hide more recent pins received by the bot.
+    latest_date_rows = _query_rows("""SELECT max(latest_day) AS latest_day FROM (
+        SELECT max(v.report_date) AS latest_day FROM silver_so_visit_v1 v
+        WHERE upper(trim(coalesce(v.position,'SO'))) IN ('SO','SS')
+          AND v.chat_id<>-1004303041907
+          AND lower(trim(coalesce(v.group_name,'')))<>'test_so'
+          AND v.latitude BETWEEN 9.80 AND 14.75 AND v.longitude BETWEEN 102.30 AND 107.70
+        UNION ALL
+        SELECT max(e.at::date) FROM so_events_v1 e
+        LEFT JOIN so_groups_v1 g ON g.id=e.chat
+        WHERE e.kind='pin' AND e.chat<>-1004303041907
+          AND lower(trim(coalesce(g.title,'')))<>'test_so'
+          AND CASE WHEN e.data->>'lat' ~ '^-?[0-9]+([.][0-9]+)?$' THEN (e.data->>'lat')::double precision END BETWEEN 9.80 AND 14.75
+          AND CASE WHEN e.data->>'lon' ~ '^-?[0-9]+([.][0-9]+)?$' THEN (e.data->>'lon')::double precision END BETWEEN 102.30 AND 107.70
+    ) sources""")
+    latest_day = latest_date_rows[0].get("latest_day") if latest_date_rows else None
+    collection_rows = _query_rows("""SELECT
+        (SELECT count(*) FROM so_groups_v1 WHERE active=1) AS registered_groups,
+        EXISTS(SELECT 1 FROM so_events_v1 WHERE kind='pin') AS has_received_locations
+    """)
+    collection = collection_rows[0] if collection_rows else {}
     # Business coverage targets are configurable because the administrative
     # master can temporarily contain staging/duplicate rows during uploads.
     coverage_master = {
@@ -613,6 +641,8 @@ def snapshot(day: date | None = Query(default=None)):
     payload = {"date": selected.isoformat(), "current_business_date": current.isoformat(), "is_live": selected==current,
             "data_source":data_source,
             "checkins": checkins, "routes": routes, "leaves": leaves, "missing_rows": missing_rows, "plan_communes": plan_communes, "plan_targets": plan_targets, "dealers": load_dealers(),
+            "collection": collection, "roster": roster_rows, "latest_data_date": latest_day.isoformat() if latest_day else None,
+            "data_status": "available" if checkins else "no_visits_for_date" if latest_day else "no_collected_visits",
             "employees_total": int(totals.get("employees_total") or 0),
             "active_sale": int(ops.get("active_sale") or 0),
             "checkin_count": int(ops.get("checkin_count") or 0),

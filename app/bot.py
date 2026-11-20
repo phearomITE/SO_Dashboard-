@@ -1084,7 +1084,16 @@ async def activity(update,context):
         for c in s.scalars(select(Controller).where(Controller.uid==u.id)):
             c.name=u.full_name;c.username=u.username or ''
         g=s.get(Group,msg.chat_id)
-        if not g or not enabled(g):return
+        if not g or not enabled(g):
+            # Log configuration failures without disclosing employee report text.
+            if msg.location or is_form(text):
+                warnings=context.application.bot_data.setdefault('collection_warnings',{})
+                last=warnings.get(msg.chat_id,0)
+                if time.monotonic()-last>300:
+                    log.warning('Outlet collection skipped chat=%s: %s',msg.chat_id,
+                                'group is not registered; use /setup_group' if not g else 'group is disabled by configuration')
+                    warnings[msg.chat_id]=time.monotonic()
+            return
         if g.topic is not None and msg.message_thread_id!=g.topic:return
         candidates=list(s.scalars(select(Roster).where(Roster.uid==u.id,Roster.active==1)))
         candidates.sort(key=lambda row:(row.source!='excel',str(row.employee or '').startswith('manual:')))
@@ -1336,16 +1345,16 @@ async def post_init(app):
     app.bot_data['route_analysis_lock']=asyncio.Lock()
     # Start at the next complete reporting window. Never invent misses during downtime.
     app.bot_data['started']=db.now()
-    app.job_queue.run_repeating(tick,interval=5,first=5,job_kwargs={'max_instances':1,'coalesce':True})
+    app.job_queue.run_repeating(tick,interval=5,first=5,job_kwargs={'max_instances':1,'coalesce':True,'misfire_grace_time':30})
     if WAREHOUSE_ENABLED:
         # The refresh handles a large historical event set. Run it in the
         # existing worker-thread path only after Telegram polling has started.
         app.job_queue.run_repeating(warehouse_job,interval=WAREHOUSE_INTERVAL_MINUTES*60,
                                     first=WAREHOUSE_INITIAL_DELAY_SECONDS,
-                                    job_kwargs={'max_instances':1,'coalesce':True})
+                                    job_kwargs={'max_instances':1,'coalesce':True,'misfire_grace_time':max(600,WAREHOUSE_INTERVAL_MINUTES*60)})
     # A JobQueue task starts after Application.start(), avoiding PTB's warning
     # about un-awaited tasks created from post_init.
-    app.job_queue.run_once(backfill_geo_job,when=1)
+    app.job_queue.run_once(backfill_geo_job,when=1,job_kwargs={'misfire_grace_time':600})
 
 async def post_shutdown(app):db.release_lock()
 
