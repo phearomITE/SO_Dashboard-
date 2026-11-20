@@ -1,3 +1,4 @@
+import TelegramConnections from './TelegramConnections.jsx';
 import { sessionFetch } from "./dashboardSession.js";
 import ActualPlan from "./ActualPlan.jsx";
 import ReasonSummaryPage from './ReasonSummaryPage.jsx';
@@ -290,6 +291,7 @@ function RegionDealerFilters({ region, setRegion, dealer, setDealer }) {
 function LiveMap({ target }) {
   const params = new URLSearchParams({embedded:"1"});
   if (target?.employee_id) params.set("employee_id", String(target.employee_id));
+  params.set("ui", "20261120-connections");
   if (target?.telegram_id) params.set("telegram_id", String(target.telegram_id));
   if (target?.region) params.set("region", String(target.region));
   if (target?.dealer) params.set("dealer", String(target.dealer));
@@ -1015,6 +1017,8 @@ function SettingsPage() {
   },[]);
   async function change(key,value){if(!s||saving)return;setError("");const before=s[key];setS(x=>({...x,[key]:value}));setSaving(true);try{const result=await adminApi("/api/v1/admin/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({[key]:value})});setS({...result.questions,automation_enabled:result.automation.enabled,alert_interval_minutes:result.alert_interval_minutes})}catch(e){setS(x=>({...x,[key]:before}));setError(e.message)}finally{setSaving(false)}}
   return (
+    <>
+    <TelegramConnections api={adminApi}/>
     <div className="panel" style={{ padding: "4px 24px 24px" }}>
       <div className="panel-head" style={{ paddingLeft: 0, paddingRight: 0 }}>
         <div>
@@ -1065,6 +1069,7 @@ function SettingsPage() {
       <div className="settings-row"><div><b>Public ngrok dashboard link</b></div><div style={{display:"flex",gap:10,alignItems:"center"}}>{tunnel.active&&<a className="secondary compact" href={tunnel.public_url} target="_blank" rel="noreferrer">Open public dashboard</a>}<button className="secondary compact" onClick={refreshTunnel}>Refresh link</button></div></div>
       </>}
     </div>
+    </>
   );
 }
 

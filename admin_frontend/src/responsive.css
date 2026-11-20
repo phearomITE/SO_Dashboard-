@@ -39,3 +39,17 @@ body{overflow-x:hidden}button,a,input,select,textarea{-webkit-tap-highlight-colo
 }
 @media(max-width:380px){.sa-filter-bar{grid-template-columns:minmax(0,1fr)}}
 @media(pointer:coarse){.sa-filter-bar input,.sa-filter-bar select,.sa-modal input,.sa-modal select{font-size:16px;min-height:44px}}
+
+.telegram-connections{margin-bottom:18px;padding:0 16px 16px;min-width:0}
+.telegram-connections .panel-head{padding-left:0;padding-right:0}
+.connection-counts{display:flex;flex-wrap:wrap;gap:10px 24px;padding:12px 0}
+.connection-counts b{color:var(--sa-emerald);font-size:20px;margin-right:4px}
+.connection-empty{padding:12px;background:#fff7e6;border:1px solid #ead7ac;border-radius:8px}
+.connection-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end;padding:18px 0}
+.connection-form h3,.connection-help{grid-column:1/-1;margin:0}
+.connection-form .field{min-width:0;width:100%;max-width:none}
+.connection-help{font-size:12px;color:var(--sa-muted);overflow-wrap:anywhere}
+.connection-help code{color:var(--sa-ink);user-select:all}
+.connection-central{grid-column:1/-1}
+@media(max-width:700px){.connection-form{grid-template-columns:repeat(2,minmax(0,1fr))}.connection-form button{grid-column:1/-1}.connection-counts{gap:8px 16px}}
+@media(max-width:380px){.connection-form{grid-template-columns:minmax(0,1fr)}}

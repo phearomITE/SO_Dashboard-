@@ -547,7 +547,11 @@ async def command(update,context):
         if cmd=='setup_group':
             admin(uid)
             if chat.type=='private':raise ValueError('Run /setup_group inside Test_SO or the reporting group.')
-            if not args:raise ValueError('Use /setup_group | R1-CA2 | TEST_USER_IDS')
+            if not args:
+                matches=set(re.findall(r'(?<![A-Z0-9])(R[1-8])\s*[-_]\s*([A-Z0-9]+)(?![A-Z0-9])',str(chat.title or '').upper()))
+                codes=[f'{region}-{dealer}' for region,dealer in matches if DEALER_REGIONS.get(dealer)==region]
+                if len(codes)!=1:raise ValueError('Use /setup_group | R1-CA2 inside the reporting group. Its Region-Dealer code could not be inferred uniquely.')
+                args=[codes[0]]
             c=valid_code(args[0]);test_ids=[int(x.strip()) for x in args[1].split(',') if x.strip()] if len(args)>1 else []
             if TEST_MODE and not test_ids:raise ValueError('Test mode requires explicit test Telegram IDs after the group code.')
             for tid in test_ids:

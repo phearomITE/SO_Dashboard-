@@ -198,6 +198,8 @@ app = FastAPI(title="SO Alert Live Check-In Dashboard", version="1.0.0", lifespa
               docs_url="/api/docs", redoc_url=None)
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 app.include_router(admin_router)
+from app.telegram_connections import router as telegram_connections_router
+app.include_router(telegram_connections_router)
 from app.gp_reports import router as gp_router
 app.include_router(gp_router)
 app.mount("/assets", StaticFiles(directory=ROOT / "app" / "static" / "admin" / "assets", check_dir=False), name="admin-assets")

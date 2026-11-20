@@ -535,3 +535,13 @@ def test_old_direct_reply_pin_does_not_complete_new_window():
         s.add(Event(id=2,chat=-100,mid=2,uid=100,at=datetime(2026,9,15,7,0),kind='pin',data={'lat':11,'lon':104}))
     app=ctx().application;asyncio.run(check_window(app,-100,start,end))
     assert app.bot.send_message.await_count==1
+
+
+def test_setup_group_can_infer_unique_business_scope_from_title(monkeypatch):
+    monkeypatch.setattr('app.bot.TEST_MODE',False)
+    with db.session() as s:s.delete(s.get(Group,-100))
+    run('/setup_group',title='R3-KKG3 Execution Excellent')
+    with db.session() as s:
+        g=s.get(Group,-100)
+        assert g.code=='R3-KKG3' and g.active==1 and g.topic is None
+    with pytest.raises(ValueError):run('/setup_group',title='Group_SO_Controll')
