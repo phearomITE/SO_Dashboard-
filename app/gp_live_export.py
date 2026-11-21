@@ -50,6 +50,13 @@ def _norm_outlet_type(value: str | None) -> str:
     return "Retail"
 
 
+_LEAKED_LABEL_PREFIXES = (
+    "attacking stock", "tour program", "key wholesale", "emergency outlet",
+    "water", "c-cola", "c cola", "ize pet", "product display", "remark",
+    "program", "posm", "banner", "outlet type", "outlet name", "dealer", "phone",
+)
+
+
 def _metric_qty(value: object) -> int:
     """Binary outlet-count conversion (0 or 1) matching GP Execution Purchase outlet By SKU."""
     text_val = str(value or "").strip().strip("*").strip()
@@ -57,6 +64,11 @@ def _metric_qty(value: object) -> int:
         return 0
     low = text_val.casefold()
     if low in ("-", "—", "–", "no", "n", "o", "none", "nil", "null", "n/a", "na", "false"):
+        return 0
+    # Guard against legacy rows where a blank field accidentally captured the next form label
+    if ":" in text_val or "៖" in text_val:
+        return 0
+    if any(low.startswith(prefix) for prefix in _LEAKED_LABEL_PREFIXES):
         return 0
     m = re.fullmatch(r"[-+]?\d+(?:\.\d+)?", text_val)
     if m:
@@ -184,13 +196,26 @@ def _safe_write(sheet, coord_or_row, col_or_val, val=None):
 
 
 def _setup_headers(sheet, row1_label: str, is_dealer: bool, day: date) -> None:
+    from openpyxl.utils import get_column_letter
+
     # Unmerge any stale merges so header & data cells are safely writable
     for rng in list(sheet.merged_cells.ranges):
         sheet.unmerge_cells(str(rng))
 
+    # Clear header block B2:AR9 cleanly
+    for r in range(2, 10):
+        for c in range(2, 45):
+            cell = sheet.cell(r, c)
+            cell.value = None
+            cell.fill = PatternFill(fill_type=None)
+            cell.border = THIN_BORDER if r >= 5 else Border()
+
     _safe_write(sheet, "B2", "Region:R1 to R8")
     _safe_write(sheet, "B3", f"Date:{day:%d.%m.%Y}")
     _safe_write(sheet, "B4", "#Dealer:65")
+    for coord in ("B2", "B3", "B4"):
+        sheet[coord].font = Font(name="Calibri", size=11, bold=True, color="000000")
+
     _safe_write(sheet, "B5", "Daily Sales Report by Dealer" if is_dealer else "Daily Sales Report")
     _safe_write(sheet, "AR5", "REMARK")
     _safe_write(sheet, "B6", row1_label)
@@ -201,39 +226,92 @@ def _setup_headers(sheet, row1_label: str, is_dealer: bool, day: date) -> None:
     _safe_write(sheet, "H7", "Actual Visit Location")
     _safe_write(sheet, "J7", "# Outlets Visit\nBased on Report")
     _safe_write(sheet, "K7", "Average #\nof Outlets Visit")
-    _safe_write(sheet, "L7", "Execution Purchase outlet By SKU")
+    _safe_write(sheet, "L6", "Execution")
+    _safe_write(sheet, "L7", "Purchase outlet By SKU")
 
-    sheet["B5"].fill = PatternFill("solid", fgColor="D9E2F3")
-    sheet["B5"].font = Font(name="Calibri", size=16, bold=True, italic=True, color="FF0000")
-    sheet["AR5"].fill = PatternFill("solid", fgColor="FCE4D6")
-    sheet["AR5"].font = Font(name="Calibri", size=10, bold=True, color="000000")
+    # Apply exact merges matching the approved Daily Sales Report layout
+    sheet.merge_cells("B5:AQ5")
+    sheet.merge_cells("AR5:AR9")
+    if is_dealer:
+        sheet.merge_cells("B6:B9")
+        sheet.merge_cells("C6:C9")
+    else:
+        sheet.merge_cells("B6:C9")
+    sheet.merge_cells("D6:G7")
+    sheet.merge_cells("H6:K6")
+    sheet.merge_cells("H7:I7")
+    sheet.merge_cells("J7:J9")
+    sheet.merge_cells("K7:K9")
+    sheet.merge_cells("L6:AQ6")
+    sheet.merge_cells("L7:AQ7")
+    for col_let in ("D", "E", "F", "G", "H", "I"):
+        sheet.merge_cells(f"{col_let}8:{col_let}9")
+    for _key, _label, start_col in REPORT_METRICS:
+        sheet.merge_cells(start_row=8, start_column=start_col, end_row=8, end_column=start_col + 3)
+
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    # Row 5: Title blue banner + Peach REMARK
     for col in range(2, 44):
-        sheet.cell(5, col).fill = PatternFill("solid", fgColor="D9E2F3")
+        c = sheet.cell(5, col)
+        c.fill = PatternFill("solid", fgColor="D9E2F3")
+        c.border = THIN_BORDER
+    sheet["B5"].font = Font(name="Calibri", size=18, bold=True, italic=True, color="FF0000")
+    sheet["B5"].alignment = center
+
+    for r in range(5, 10):
+        c = sheet.cell(r, 44)
+        c.fill = PatternFill("solid", fgColor="FCE4D6")
+        c.border = THIN_BORDER
+    sheet["AR5"].font = Font(name="Calibri", size=10, bold=True, color="000000")
+    sheet["AR5"].alignment = center
+
+    # Gray section headers: H6:K6, L6:AQ6, L7:AQ7
+    for r, c1, c2 in [(6, 8, 11), (6, 12, 43), (7, 12, 43)]:
+        for c in range(c1, c2 + 1):
+            sheet.cell(r, c).fill = PatternFill("solid", fgColor="E7E6E6")
+
+    for coord, sz, italic in [
+        ("B6", 13, False), ("C6", 13, False), ("D6", 13, False),
+        ("H6", 13, False), ("H7", 11, False), ("J7", 10, False), ("K7", 10, False),
+        ("L6", 16, True), ("L7", 14, True),
+    ]:
+        cell = sheet[coord]
+        cell.font = Font(name="Calibri", size=sz, bold=True, italic=italic, color="000000")
+        cell.alignment = center
 
     for col, title in [(4, "SO"), (5, "SS"), (6, "AL"), (7, "Active"), (8, "District"), (9, "Commune")]:
         c = sheet.cell(8, col)
         c.value = title
-        c.font = Font(name="Calibri", size=11, bold=True, color="FF0000" if col == 6 else ("00B050" if col == 7 else "000000"))
-        c.alignment = Alignment(horizontal="center", vertical="center")
-        c.border = THIN_BORDER
-    if is_dealer:
-        sheet.cell(8, 2).value = "REGION"
-        sheet.cell(8, 3).value = "DEALER"
+        c.font = Font(name="Calibri", size=12, bold=True, color="FF0000" if col == 6 else ("00B050" if col == 7 else "000000"))
+        c.alignment = center
+        c.fill = PatternFill("solid", fgColor="FFFFFF")
 
     for idx, (_key, label, start_col) in enumerate(REPORT_METRICS):
         color = "00B0F0" if idx < 4 else "FF0000"
         h_cell = sheet.cell(8, start_col)
         h_cell.value = label
         h_cell.fill = PatternFill("solid", fgColor="FFFFFF")
-        h_cell.font = Font(name="Calibri", size=12, bold=True, color=color)
-        h_cell.alignment = Alignment(horizontal="center", vertical="center")
+        h_cell.font = Font(name="Calibri", size=11, bold=True, color=color)
+        h_cell.alignment = center
         for i, ot in enumerate(OUTLET_TYPES):
             sub = sheet.cell(9, start_col + i)
             sub.value = ot
             sub.fill = PatternFill("solid", fgColor="FFFFFF")
-            sub.font = Font(name="Calibri", size=11, bold=True, color="000000")
-            sub.alignment = Alignment(horizontal="center", vertical="center")
-            sub.border = THIN_BORDER
+            sub.font = Font(name="Calibri", size=10, bold=True, color="000000")
+            sub.alignment = center
+
+    # Row heights & column widths so nothing clips in Excel or Dashboard preview
+    sheet.row_dimensions[5].height = 30
+    sheet.row_dimensions[6].height = 24
+    sheet.row_dimensions[7].height = 34
+    sheet.row_dimensions[8].height = 22
+    sheet.row_dimensions[9].height = 20
+    widths = {2: 14, 3: 11, 4: 9, 5: 9, 6: 9, 7: 10, 8: 11, 9: 11, 10: 15, 11: 15, 44: 18}
+    for col in range(12, 44):
+        widths[col] = 7.5
+    for col_idx, w in widths.items():
+        sheet.column_dimensions[get_column_letter(col_idx)].width = w
 
 
 def _collect_range_visits(conn: Session, start_day: date, end_day: date) -> list[dict]:
@@ -338,11 +416,13 @@ def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: P
     report = wb["Report GP"]
     _setup_headers(report, "REGION", False, target_day)
 
+    center_align = Alignment(horizontal="center", vertical="center")
     # Clear & write R1..R8 (rows 10..17)
     for idx in range(8):
         row_num = 10 + idx
         reg = f"R{idx + 1}"
         report.cell(row_num, 2, reg)
+        report.merge_cells(start_row=row_num, start_column=2, end_row=row_num, end_column=3)
         report.cell(row_num, 4, reg_so[reg])
         report.cell(row_num, 5, reg_ss[reg])
         report.cell(row_num, 6, reg_al[reg])
@@ -359,9 +439,14 @@ def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: P
             cell = report.cell(row_num, col)
             cell.border = THIN_BORDER
             cell.fill = PatternFill("solid", fgColor="FFFFFF")
+            cell.font = Font(name="Calibri", size=10, bold=(col == 2), color="000000")
+            cell.alignment = center_align
+            if col == 11:
+                cell.number_format = "0.00"
 
     # Grand total row 18
     report.cell(18, 2, "Grand Total")
+    report.merge_cells("B18:C18")
     for col in range(4, 8):
         col_let = report.cell(10, col).column_letter
         report.cell(18, col, f"=SUM({col_let}10:{col_let}17)")
@@ -375,8 +460,11 @@ def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: P
     for col in range(2, 45):
         cell = report.cell(18, col)
         cell.border = THIN_BORDER
-        cell.fill = PatternFill("solid", fgColor="FFE699")
-        cell.font = Font(name="Calibri", size=10, bold=True, color="000000")
+        cell.fill = PatternFill("solid", fgColor="70AD47" if col == 7 else "FFE699")
+        cell.font = Font(name="Calibri", size=10, bold=True, color="FF0000" if col == 6 else "000000")
+        cell.alignment = center_align
+        if col == 11:
+            cell.number_format = "0.00"
 
     # Create 'Report with Dealer' sheet (65 dealers rows 10..74, total row 75)
     dealer_ws = wb.copy_worksheet(report)
@@ -404,11 +492,14 @@ def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: P
             cell = dealer_ws.cell(row_num, col)
             cell.border = THIN_BORDER
             cell.fill = PatternFill("solid", fgColor="FFFFFF")
-            cell.font = Font(name="Calibri", size=10, bold=False, color="000000")
+            cell.font = Font(name="Calibri", size=10, bold=(col in (2, 3)), color="000000")
+            cell.alignment = center_align
+            if col == 11:
+                cell.number_format = "0.00"
 
     total_row = 75
     dealer_ws.cell(total_row, 2, "Grand Total")
-    dealer_ws.cell(total_row, 3, "")
+    dealer_ws.merge_cells(f"B{total_row}:C{total_row}")
     for col in range(4, 8):
         col_let = dealer_ws.cell(10, col).column_letter
         dealer_ws.cell(total_row, col, f"=SUM({col_let}10:{col_let}74)")
@@ -422,8 +513,11 @@ def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: P
     for col in range(2, 45):
         cell = dealer_ws.cell(total_row, col)
         cell.border = THIN_BORDER
-        cell.fill = PatternFill("solid", fgColor="FFE699")
-        cell.font = Font(name="Calibri", size=10, bold=True, color="000000")
+        cell.fill = PatternFill("solid", fgColor="70AD47" if col == 7 else "FFE699")
+        cell.font = Font(name="Calibri", size=10, bold=True, color="FF0000" if col == 6 else "000000")
+        cell.alignment = center_align
+        if col == 11:
+            cell.number_format = "0.00"
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)

@@ -72,7 +72,7 @@ FORM_LABELS={
 
 def field(text,labels):
     labels='|'.join(re.escape(x) for x in labels)
-    match=re.search(rf'(?im)^\s*(?:{labels})\s*[:៖,=\-]\s*(.*?)\s*(?=\n\s*[^\n:៖]{{1,40}}\s*[:៖]|\Z)',str(text or ''))
+    match=re.search(rf'(?im)^\s*(?:{labels})\s*[:៖,=\-][ \t]*([^\n]*)',str(text or ''))
     return match.group(1).strip() if match else ''
 
 def refresh_warehouse(s,mode='incremental'):

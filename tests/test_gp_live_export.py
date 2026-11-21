@@ -82,3 +82,29 @@ def test_export_live_gp_reports_works_without_template_file(tmp_path):
         assert meta["dealers"] == 65
     finally:
         db.engine.dispose()
+
+
+def test_gp_ignores_leaked_labels_and_preserves_merged_template_headers(tmp_path):
+    from app.gp_live_export import _metric_qty
+    assert _metric_qty("Attacking Stock Outlet:") == 0
+    assert _metric_qty("Tour Program Outlet:") == 0
+    assert _metric_qty("0") == 0
+    assert _metric_qty("No") == 0
+    assert _metric_qty("6") == 1
+    assert _metric_qty("Yes") == 1
+
+    db.connect("sqlite:///:memory:")
+    try:
+        day = date(2026, 11, 21)
+        paths = export_live_gp_reports(day.isoformat(), day.isoformat(), tmp_path / "missing.xlsx", tmp_path)
+        wb = load_workbook(paths[0], data_only=False)
+        try:
+            gp = wb["Report GP"]
+            merges = {str(r) for r in gp.merged_cells.ranges}
+            for expected in ("B5:AQ5", "AR5:AR9", "B6:C9", "D6:G7", "H6:K6", "J7:J9", "K7:K9", "L6:AQ6", "L7:AQ7", "L8:O8"):
+                assert expected in merges, f"Missing merge {expected}"
+            assert gp["K10"].number_format == "0.00"
+        finally:
+            wb.close()
+    finally:
+        db.engine.dispose()
