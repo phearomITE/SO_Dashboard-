@@ -360,33 +360,52 @@ function renderEmployeesList(data){
  wrap.innerHTML=headHtml+itemsHtml;
 }
 
-function drawRoadRoute(waypoints){
+function applyRoadMetrics(d,hasDealer){
+ if(!d)return;
+ if(d.total_km!=null){
+  const totEl=$('routeTotalDistance');
+  if(totEl)totEl.textContent=`Route distance · ${Number(d.total_km).toFixed(2)} km`;
+ }
+ if(Array.isArray(d.legs_km)&&d.legs_km.length){
+  d.legs_km.forEach((km,legIdx)=>{
+   const stopIdx=hasDealer?legIdx:(legIdx+1);
+   const el=document.querySelector(`[data-stop-dist-idx="${stopIdx}"]`);
+   if(el)el.textContent=`${Number(km).toFixed(2)} km ${stopIdx===0?'from dealer':'from previous stop'}`;
+  });
+ }
+}
+
+function drawRoadRoute(waypoints,hasDealer){
  roadLayer.clearLayers();
  if(!waypoints||waypoints.length<2)return;
  const coords=waypoints.slice(0,80).map(pt=>`${Number(pt[1]).toFixed(5)},${Number(pt[0]).toFixed(5)}`).join(';');
- const drawLine=(latlngs,isRoad)=>{
+ const drawLine=(latlngs)=>{
   roadLayer.clearLayers();
-  L.polyline(latlngs,{color:'#167554',weight:isRoad?4:3,opacity:isRoad?.92:.75,dashArray:isRoad?null:'7 6'}).addTo(roadLayer);
+  L.polyline(latlngs,{color:'#167554',weight:4,opacity:.92}).addTo(roadLayer);
  };
  const cached=roadGeomCache.get(coords);
- if(cached){drawLine(cached,true);return}
- drawLine(waypoints,false);
+ if(cached){
+  if(cached.geometry?.length)drawLine(cached.geometry);
+  applyRoadMetrics(cached,hasDealer);
+  return;
+ }
  const reqId=++roadRequestVersion;
  fetch(`/api/v1/dashboard/road-route?coords=${encodeURIComponent(coords)}`)
   .then(r=>r.ok?r.json():null)
   .then(d=>{
    if(reqId!==roadRequestVersion||!d?.geometry?.length)return;
-   roadGeomCache.set(coords,d.geometry);
+   roadGeomCache.set(coords,d);
    if(roadGeomCache.size>50)roadGeomCache.delete(roadGeomCache.keys().next().value);
-   drawLine(d.geometry,true);
+   drawLine(d.geometry);
+   applyRoadMetrics(d,hasDealer);
   }).catch(()=>{});
 }
 
 function render(){const previouslyOpen=lastOpenOutletPin;const data=filtered();setDashboardState('');const selectedPaths=new Set(data.map(x=>x.path_id)),routeByPin={},distanceFallback={};layers.clearLayers();roadLayer.clearLayers();dealerLayer.clearLayers();markerByPin.clear();(raw.routes||[]).filter(x=>selectedPaths.has(x.path_id)).forEach(x=>{if(x.is_checkin)routeByPin[x.pin_id]=x});const fallbackPaths={};data.forEach(x=>(fallbackPaths[x.path_id]??=[]).push(x));Object.values(fallbackPaths).forEach(points=>{points.sort((a,b)=>Number(a.point_order)-Number(b.point_order));let previous=raw.dealers.find(d=>d.dealer===points[0]?.dealer&&(!points[0]?.region||d.region===points[0].region))||null;points.forEach(point=>{distanceFallback[point.pin_id]=geoKm(previous,point);previous=point})});$('active').textContent=new Set(data.map(x=>String(x.telegram_id||x.employee_id))).size;$('total').textContent=data.length;renderActualPlan(data);const missingQuery=$('employee').value.trim().toLowerCase(),scopedMissing=(raw.missing_rows||[]).filter(x=>(!$('region').value||x.region===$('region').value)&&(!$('dealer').value||x.dealer===$('dealer').value)&&(!missingQuery||`${x.employee_id||''} ${x.real_name||''} ${x.telegram_id||''}`.toLowerCase().includes(missingQuery)));$('missing').textContent=raw.missing_rows?scopedMissing.length:(raw.missing_count??0);$('over10').textContent=data.filter(x=>Number(routeByPin[x.pin_id]?.road_distance_km??x.road_distance_km??distanceFallback[x.pin_id])>10).length;const employeeQuery=$('employee').value.trim().toLowerCase(),leaveRows=(raw.leaves||[]).filter(x=>(!$('region').value||x.region===$('region').value)&&(!$('dealer').value||x.dealer===$('dealer').value)&&(!employeeQuery||`${x.employee_id} ${x.real_name} ${x.telegram_id}`.toLowerCase().includes(employeeQuery))),leaveIds=new Set(leaveRows.map(x=>String(x.employee_id||x.telegram_id)));$('al').textContent=leaveIds.size;const actual={provinces:new Set(data.map(x=>x.province).filter(Boolean)).size,districts:new Set(data.map(x=>x.district).filter(Boolean)).size,communes:new Set(data.map(x=>x.commune_code||x.commune).filter(Boolean)).size},master=raw.coverage_master||{provinces:25,districts:210,communes:1651};$('pcover').innerHTML=`${master.provinces}<span class="slash">/</span><span class="actual">${actual.provinces}</span>`;$('dcover').innerHTML=`${master.districts}<span class="slash">/</span><span class="actual">${actual.districts}</span>`;$('ccover').innerHTML=`${master.communes}<span class="slash">/</span><span class="actual">${actual.communes}</span>`;const bounds=[];
  const rg={};(raw.routes||[]).filter(x=>selectedPaths.has(x.path_id)).forEach(x=>(rg[x.path_id]??=[]).push(x));Object.values(rg).forEach(points=>{points.sort((a,b)=>a.point_order-b.point_order);const xy=points.map(p=>[p.latitude,p.longitude]);if(xy.length>1)L.polyline(xy,{color:'#167554',weight:3.5,opacity:.92}).addTo(layers);bounds.push(...xy)});
- const checkinPaths={};data.forEach(x=>(checkinPaths[x.path_id]??=[]).push(x));Object.entries(checkinPaths).forEach(([path,points])=>{points.sort((a,b)=>a.point_order-b.point_order);const station=raw.dealers.find(d=>d.dealer===points[0]?.dealer&&(!points[0]?.region||d.region===points[0].region));let previous=station||null;points.forEach(p=>{distanceFallback[p.pin_id]=geoKm(previous,p);previous=p});if(rg[path]?.length)return;const xy=[];if(station)xy.push([station.latitude,station.longitude]);xy.push(...points.map(p=>[p.latitude,p.longitude]));if(xy.length>1)L.polyline(xy,{color:'#167554',weight:3,opacity:.85,dashArray:'7 6'}).bindTooltip('Check-in sequence').addTo(layers);bounds.push(...xy)});
+ const checkinPaths={};data.forEach(x=>(checkinPaths[x.path_id]??=[]).push(x));Object.entries(checkinPaths).forEach(([path,points])=>{points.sort((a,b)=>a.point_order-b.point_order);const station=raw.dealers.find(d=>d.dealer===points[0]?.dealer&&(!points[0]?.region||d.region===points[0].region));let previous=station||null;points.forEach(p=>{distanceFallback[p.pin_id]=geoKm(previous,p);previous=p});if(rg[path]?.length)return;if(station)bounds.push([station.latitude,station.longitude]);bounds.push(...points.map(p=>[p.latitude,p.longitude]))});
  const scopedDealerFilter=Boolean($('province').value||$('district').value||$('commune').value||$('employee').value),dataDealers=new Set(data.map(x=>x.dealer));const visibleDealers=(raw.dealers||[]).filter(d=>(!$('region').value||d.region===$('region').value)&&(!$('dealer').value||d.dealer===$('dealer').value)&&(!scopedDealerFilter||dataDealers.has(d.dealer)));visibleDealers.forEach(d=>{const icon=L.divIcon({className:'dealer-icon',html:'<span class="dealer-marker" aria-label="Chip Mong dealer"></span>',iconSize:L.point(34,34),iconAnchor:L.point(17,17),popupAnchor:L.point(0,-18)});L.marker([d.latitude,d.longitude],{icon,zIndexOffset:1000,riseOnHover:true}).bindTooltip(`${esc(d.region)}-${esc(d.dealer)}`,{direction:'top',offset:[0,-15]}).bindPopup(`<div class="popup"><h3>Dealer: ${esc(d.dealer)}</h3><div class="grid"><b>Region</b><span>${esc(d.region)}</span><b>Province</b><span>${esc(d.province||'—')}</span><b>District</b><span>${esc(d.district||'—')}</span><b>Commune</b><span>${esc(d.commune||'—')}</span></div></div>`).addTo(dealerLayer);bounds.push([d.latitude,d.longitude])});
- const checkinCluster=L.markerClusterGroup({chunkedLoading:true,chunkInterval:100,chunkDelay:25,maxClusterRadius:45,removeOutsideVisibleBounds:true,showCoverageOnHover:false});data.forEach(x=>{const gps=x.pin_source==='telegram_location',first=Number(x.point_order)===1,wrongPlan=String(x.plan_check||'').toLowerCase()==='incorrect',color=wrongPlan?'#c84b31':'#167554',pinNum=esc(x.point_order??''),icon=L.divIcon({className:'',html:`<div class="pin sa-num-pin ${wrongPlan?'wrong-plan':''}" style="background:${color}">${pinNum}</div>`,iconSize:[26,26],iconAnchor:[13,13]});const route=routeByPin[x.pin_id],roadDistance=route?.road_distance_km??x.road_distance_km,distance=roadDistance??distanceFallback[x.pin_id],estimated=roadDistance==null&&distance!=null,from=first?'Dealer':'Previous Outlet',user=x.username?'@'+x.username.replace('@',''):'ID '+x.telegram_id,source=gps?'GPS Pin':'Image OCR / Coordinate',imageLink=esc(x.open_image||x.open_telegram),photo=(x.open_image||x.open_telegram)?`<a href="${imageLink}" target="_blank" rel="noopener noreferrer">Open Telegram evidence ↗</a>`:'';const tipTxt=`${esc(x.real_name||'SO')} · Outlet ${pinNum||'—'} · ${esc(x.pin_time||'—')}${distance!=null?' · Distance: '+(estimated?'≈ ':'')+Number(distance).toFixed(2)+' km':''}`;const marker=L.marker([x.latitude,x.longitude],{icon}).bindTooltip(tipTxt,{direction:'top',offset:[0,-12],className:'sa-pin-tooltip'}).bindPopup(`<section class="outlet-detail" aria-label="Outlet ${esc(x.point_order)} details"><header class="outlet-detail__header"><span class="outlet-detail__eyebrow">CHECK-IN DETAILS</span><h3>Outlet ${esc(x.point_order)}</h3></header><div class="outlet-detail__body"><div class="outlet-detail__distance"><span>From ${from}</span><strong>${distance==null?'—':(estimated?'≈ ':'')+Number(distance).toFixed(2)+' km'}</strong></div><dl class="outlet-detail__rows"><div><dt>Region / Dealer</dt><dd>${esc(x.region)} / ${esc(x.dealer)}</dd></div><div><dt>District</dt><dd>${esc(x.district||'—')}</dd></div><div><dt>Actual Commune</dt><dd>${esc(x.commune||'—')}</dd></div><div><dt>Plan Commune</dt><dd>${esc(plannedFor(x))}</dd></div><div><dt>Plan Status</dt><dd><span class="outlet-detail__status ${wrongPlan?'outlet-detail__status--bad':'outlet-detail__status--ok'}">${esc(x.plan_check||'Not checked')}</span></dd></div><div><dt>Employee Name</dt><dd>${esc(x.real_name||'—')}</dd></div><div><dt>Check-in Time</dt><dd>${esc(x.pin_time||'—')}</dd></div></dl>${photo?`<div class="outlet-detail__evidence"><span>REPORT PHOTO</span>${photo}</div>`:''}<a class="outlet-detail__directions" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(x.latitude+','+x.longitude)}" target="_blank" rel="noopener noreferrer" aria-label="Directions from my location to Outlet ${esc(x.point_order)}">Directions from my location ↗</a></div></section>`,{maxWidth:310,minWidth:260,maxHeight:Math.min(470,Math.floor(window.innerHeight*.65)),autoPan:true,autoPanPadding:[28,28],closeButton:true,keepInView:true,className:"outlet-map-popup"});marker.on('popupopen',()=>{lastOpenOutletPin=String(x.pin_id)});markerByPin.set(String(x.pin_id),{marker,cluster:checkinCluster,visit:x});checkinCluster.addLayer(marker);bounds.push([x.latitude,x.longitude])});layers.addLayer(checkinCluster);
+ const checkinCluster=L.markerClusterGroup({chunkedLoading:true,chunkInterval:100,chunkDelay:25,maxClusterRadius:45,removeOutsideVisibleBounds:true,showCoverageOnHover:false});data.forEach(x=>{const gps=x.pin_source==='telegram_location',first=Number(x.point_order)===1,wrongPlan=String(x.plan_check||'').toLowerCase()==='incorrect',color=wrongPlan?'#c84b31':'#167554',pinNum=esc(x.point_order??''),icon=L.divIcon({className:'',html:`<div class="pin sa-num-pin ${wrongPlan?'wrong-plan':''}" style="background:${color}">${pinNum}</div>`,iconSize:[26,26],iconAnchor:[13,13]});const route=routeByPin[x.pin_id],roadDistance=route?.road_distance_km??x.road_distance_km,distance=roadDistance??distanceFallback[x.pin_id],estimated=roadDistance==null&&distance!=null,from=first?'Dealer':'Previous Outlet',user=x.username?'@'+x.username.replace('@',''):'ID '+x.telegram_id,source=gps?'GPS Pin':'Image OCR / Coordinate',imageLink=esc(x.open_image||x.open_telegram),photo=(x.open_image||x.open_telegram)?`<a href="${imageLink}" target="_blank" rel="noopener noreferrer">Open Telegram evidence ↗</a>`:'';const tipTxt=`${esc(x.real_name||'SO')} · Outlet ${pinNum||'—'} · ${esc(x.pin_time||'—')}${distance!=null?' · Distance: '+(estimated?'≈ ':'')+Number(distance).toFixed(2)+' km':''}`;const marker=L.marker([x.latitude,x.longitude],{icon}).bindTooltip(tipTxt,{direction:'top',offset:[0,-12],className:'sa-pin-tooltip'}).bindPopup(`<section class="outlet-detail" aria-label="Outlet ${esc(x.point_order)} details"><header class="outlet-detail__header"><span class="outlet-detail__eyebrow">CHECK-IN DETAILS</span><h3>Outlet ${esc(x.point_order)}</h3></header><div class="outlet-detail__body"><div class="outlet-detail__distance"><span>From ${from}</span><strong>${distance==null?'—':(estimated?'≈ ':'')+Number(distance).toFixed(2)+' km'}</strong></div><dl class="outlet-detail__rows">${x.outlet_name?`<div><dt>Outlet Name</dt><dd>${esc(x.outlet_name)}</dd></div>`:''}<div><dt>Region / Dealer</dt><dd>${esc(x.region)} / ${esc(x.dealer)}</dd></div><div><dt>District</dt><dd>${esc(x.district||'—')}</dd></div><div><dt>Actual Commune</dt><dd>${esc(x.commune||'—')}</dd></div><div><dt>Plan Commune</dt><dd>${esc(plannedFor(x))}</dd></div><div><dt>Plan Status</dt><dd><span class="outlet-detail__status ${wrongPlan?'outlet-detail__status--bad':'outlet-detail__status--ok'}">${esc(x.plan_check||'Not checked')}</span></dd></div><div><dt>Employee Name</dt><dd>${esc(x.real_name||'—')}</dd></div><div><dt>Check-in Time</dt><dd>${esc(x.pin_time||'—')}</dd></div></dl>${photo?`<div class="outlet-detail__evidence"><span>REPORT PHOTO</span>${photo}</div>`:''}<a class="outlet-detail__directions" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(x.latitude+','+x.longitude)}" target="_blank" rel="noopener noreferrer" aria-label="Directions from my location to Outlet ${esc(x.point_order)}">Directions from my location ↗</a></div></section>`,{maxWidth:310,minWidth:260,maxHeight:Math.min(470,Math.floor(window.innerHeight*.65)),autoPan:true,autoPanPadding:[28,28],closeButton:true,keepInView:true,className:"outlet-map-popup"});marker.on('popupopen',()=>{lastOpenOutletPin=String(x.pin_id)});markerByPin.set(String(x.pin_id),{marker,cluster:checkinCluster,visit:x});checkinCluster.addLayer(marker);bounds.push([x.latitude,x.longitude])});layers.addLayer(checkinCluster);
  // Markers are reconstructed on route refresh. Restore the open outlet popup
  // after redraw rather than losing the user's selected outlet details.
  if(previouslyOpen&&markerByPin.has(String(previouslyOpen))){
@@ -421,19 +440,8 @@ function render(){const previouslyOpen=lastOpenOutletPin;const data=filtered();s
    const posText=profile.position||profile.role||'unavailable';
    const distLabel=distanceRows.length?`${routeApprox?'≈ ':''}${routeKm.toFixed(2)} km`:'Incomplete';
    $('employeeProfile').className='sa-route-head-block';
-   $('employeeProfile').innerHTML=`<h2 class="sa-route-emp-name">${esc(profile.real_name||'Sales employee')}</h2><div class="sa-route-emp-sub">Telegram ID ${esc(profile.telegram_id||'—')} · Position: ${esc(profile.position||profile.role||'unavailable')}</div><div class="sa-route-summary-block"><div class="sa-route-summary-title">Employee route · ${journey.length} Check In</div><div>${empCountInRange} employees in range · ${districts} districts · ${communes} communes</div><div>Route distance · ${esc(distLabel)}</div><div>First ${esc(first?.pin_time||'—')} · Latest ${esc(latest?.pin_time||'—')}</div><div>Status · ${esc(routeState)}</div></div>`;
+   $('employeeProfile').innerHTML=`<h2 class="sa-route-emp-name">${esc(profile.real_name||'Sales employee')}</h2><div class="sa-route-emp-sub">Telegram ID ${esc(profile.telegram_id||'—')} · Position: ${esc(profile.position||profile.role||'unavailable')}</div><div class="sa-route-summary-block"><div class="sa-route-summary-title">Employee route · ${journey.length} Check In</div><div>${empCountInRange} employees in range · ${districts} districts · ${communes} communes</div><div id="routeTotalDistance">Route distance · ${esc(distLabel)}</div><div>First ${esc(first?.pin_time||'—')} · Latest ${esc(latest?.pin_time||'—')}</div><div>Status · ${esc(routeState)}</div></div>`;
    refreshEmployeeReasons(profile);
-   const station=(raw.dealers||[]).find(d=>d.dealer===profile.dealer&&(!profile.region||d.region===profile.region));
-   const roadPts=[];
-   if(station)roadPts.push([station.latitude,station.longitude]);
-   for(const v of journey)if(v.latitude!=null&&v.longitude!=null)roadPts.push([v.latitude,v.longitude]);
-   if(roadPts.length>=2)drawRoadRoute(roadPts);
- }else{
-   $('employeesListWrap').hidden=false;$('employeeDetailWrap').hidden=true;
-   employeeReasonRequest++;$('employeeReasons').innerHTML='';
-   renderEmployeesList(data);
- }
- if(profile){
    const station=(raw.dealers||[]).find(d=>d.dealer===profile.dealer&&(!profile.region||d.region===profile.region));
    const dealerCard=`<div class="sa-tl-item sa-tl-dealer"><div class="sa-tl-dot is-dealer" aria-hidden="true">🏢</div><div class="sa-tl-content"><div class="sa-tl-title">Dealer · ${esc(profile.dealer||'—')}</div><div class="sa-tl-meta">${esc(profile.region||'—')} · ${station?`${Number(station.latitude).toFixed(5)}, ${Number(station.longitude).toFixed(5)}`:'Coordinates missing'}</div></div></div>`;
    const stopsHtml=journeyRows.map(({visit:x,index:i,distance,estimated})=>{
@@ -441,11 +449,19 @@ function render(){const previouslyOpen=lastOpenOutletPin;const data=filtered();s
      const locParts=[x.district,x.commune,x.province].filter(Boolean).join(', ')||'Location unavailable';
      const outletLine=x.outlet_name?`<div class="sa-tl-outlet">${esc(x.outlet_name)}</div>`:'';
      const kmTxt=distance!=null?`${estimated?'≈ ':''}${Number(distance).toFixed(2)} km ${i===0?'from dealer':'from previous stop'}`:(i===0?'— from dealer':'— from previous stop');
-     return `<div class="sa-tl-item"><div class="sa-tl-dot">${i+1}</div><div class="sa-tl-content"><div class="sa-tl-title">${esc(from)} → Outlet ${i+1}</div><div class="sa-tl-meta">${esc(x.pin_time||'—')} · ${esc(locParts)}</div>${outletLine}<div class="sa-tl-dist">${esc(kmTxt)}</div><button type="button" class="sa-tl-map-link" data-pin-id="${esc(x.pin_id)}">Show on map ↗</button></div></div>`;
+     return `<div class="sa-tl-item"><div class="sa-tl-dot">${i+1}</div><div class="sa-tl-content"><div class="sa-tl-title">${esc(from)} → Outlet ${i+1}</div><div class="sa-tl-meta">${esc(x.pin_time||'—')} · ${esc(locParts)}</div>${outletLine}<div class="sa-tl-dist" data-stop-dist-idx="${i}">${esc(kmTxt)}</div><button type="button" class="sa-tl-map-link" data-pin-id="${esc(x.pin_id)}">Show on map ↗</button></div></div>`;
    }).join('');
    $('journeys').innerHTML=`<div class="sa-tl-list">${dealerCard}${stopsHtml||'<div class="empty">No check-ins for this employee on the selected date.</div>'}</div>`;
+   const roadPts=[];
+   const hasDealer=Boolean(station);
+   if(station)roadPts.push([station.latitude,station.longitude]);
+   for(const v of journey)if(v.latitude!=null&&v.longitude!=null)roadPts.push([v.latitude,v.longitude]);
+   if(roadPts.length>=2)drawRoadRoute(roadPts,hasDealer);
  }else{
+   $('employeesListWrap').hidden=false;$('employeeDetailWrap').hidden=true;
+   employeeReasonRequest++;$('employeeReasons').innerHTML='';
    $('journeys').innerHTML='';
+   renderEmployeesList(data);
  }
  lastBounds=bounds;
  $('rows').textContent=`${data.length.toLocaleString()} check-ins`;if(data.length&&bounds.length)map.fitBounds(bounds,{padding:[35,35],maxZoom:15});else if(visibleDealers.length===1)map.setView([visibleDealers[0].latitude,visibleDealers[0].longitude],12);else map.setView([12.5657,104.9910],7)}

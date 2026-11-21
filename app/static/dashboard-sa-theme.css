@@ -1017,6 +1017,14 @@ html.embedded .sa-filters-live {
   line-height: 1.4;
 }
 
+.sa-tl-outlet {
+  font-size: 13px;
+  font-weight: 700;
+  color: #192d2b;
+  margin-top: 3px;
+  line-height: 1.35;
+}
+
 .sa-tl-dist {
   font-size: 12px;
   color: #677975;

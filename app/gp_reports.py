@@ -23,6 +23,15 @@ _ACTIVE={'queued','running'}
 from app.gp_preview import SHEETS as EXPECTED, keep_summary_sheets, workbook_preview, report_revision, edit_workbook
 from app.gp_performance import cached_preview, scan_plan, reuse_artifacts, store_artifacts
 TEMPLATES={'roster':'SO_List.xlsx','template':'Simple-Report GP.xlsx','staff':'R1-R8-Master List.xlsx'}
+BUNDLED_TEMPLATE=ROOT/'app'/'templates'/'Simple-Report GP.xlsx'
+
+def _resolve_template_path()->Path:
+    uploaded=BASE/'templates'/TEMPLATES['template']
+    if uploaded.exists():
+        return uploaded
+    if BUNDLED_TEMPLATE.exists():
+        return BUNDLED_TEMPLATE
+    return uploaded
 
 def _now():return datetime.now(ZoneInfo('Asia/Phnom_Penh')).isoformat(timespec='seconds')
 def _save(job):
@@ -148,7 +157,7 @@ async def _run(job):
     from app.gp_live_export import export_live_gp_reports
     started=time.perf_counter()
     settings=_settings();settings.ensure_directories()
-    template_path=BASE/'templates'/TEMPLATES['template']
+    template_path=_resolve_template_path()
     _step(job,'Reading live SO check-ins and reports from database',progress=25)
     output=JOBS/job['id']/'outputs';output.mkdir(parents=True,exist_ok=True)
     paths=export_live_gp_reports(job['start'],job['end'],template_path,output)
@@ -230,7 +239,7 @@ def live_preview(day:date|None=None,start:date|None=None,end:date|None=None,_adm
     win_start=start or day or today
     win_end=end or win_start
     if win_end<win_start:win_end=win_start
-    template_path=BASE/'templates'/TEMPLATES['template']
+    template_path=_resolve_template_path()
     with tempfile.TemporaryDirectory(prefix='gp-preview-') as tmpdir:
         out=Path(tmpdir)/f'report_gp_{win_end.isoformat()}.xlsx'
         export_live_gp_summary(win_start.isoformat(),win_end.isoformat(),template_path,out)
@@ -250,7 +259,7 @@ def live_download(day:date|None=None,start:date|None=None,end:date|None=None,_ad
     win_start=start or day or today
     win_end=end or win_start
     if win_end<win_start:win_end=win_start
-    template_path=BASE/'templates'/TEMPLATES['template']
+    template_path=_resolve_template_path()
     fname=f'report_gp_{win_start.isoformat()}.xlsx' if win_start==win_end else f'report_gp_{win_start.isoformat()}_to_{win_end.isoformat()}.xlsx'
     with tempfile.TemporaryDirectory(prefix='gp-dl-') as tmpdir:
         out=Path(tmpdir)/fname

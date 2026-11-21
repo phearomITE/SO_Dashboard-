@@ -83,9 +83,36 @@ class FormulaValues:
             raise ValueError('Unsupported template formula')
         return calculate(tree)
 
+_THEME_BASE = {
+    0: (255, 255, 255),  # lt1 (white)
+    1: (0, 0, 0),        # dk1 (black)
+    2: (231, 230, 230),  # lt2 (light gray)
+    3: (68, 84, 106),    # dk2 (dark slate)
+    4: (68, 114, 196),   # accent1
+    5: (237, 125, 49),   # accent2
+    6: (165, 165, 165),  # accent3
+    7: (255, 192, 0),    # accent4
+    8: (91, 155, 213),   # accent5
+    9: (112, 173, 71),   # accent6
+}
+
+
 def _colour(colour, fallback):
-    if colour and colour.type == 'rgb' and isinstance(colour.rgb, str):
+    if not colour:
+        return fallback
+    if colour.type == 'rgb' and isinstance(colour.rgb, str):
         return '#' + colour.rgb[-6:]
+    if colour.type == 'theme' and isinstance(colour.theme, int) and colour.theme in _THEME_BASE:
+        r, g, b = _THEME_BASE[colour.theme]
+        tint = float(getattr(colour, 'tint', 0.0) or 0.0)
+        if tint < 0:
+            factor = 1.0 + tint
+            r, g, b = int(round(r * factor)), int(round(g * factor)), int(round(b * factor))
+        elif tint > 0:
+            r = int(round(r + (255 - r) * tint))
+            g = int(round(g + (255 - g) * tint))
+            b = int(round(b + (255 - b) * tint))
+        return f'#{max(0, min(255, r)):02x}{max(0, min(255, g)):02x}{max(0, min(255, b)):02x}'
     return fallback
 
 def _display(value, number_format):
@@ -126,6 +153,7 @@ def workbook_preview(path):
                         'rowSpan':row_span,'colSpan':col_span,'style':{
                         'backgroundColor':_colour(cell.fill.fgColor,'#ffffff') if cell.fill.patternType=='solid' else '#ffffff',
                         'color':_colour(cell.font.color,'#20344f'),'fontWeight':700 if cell.font.bold else 400,
+                        'fontStyle':'italic' if cell.font.italic else 'normal',
                         'textAlign':cell.alignment.horizontal if cell.alignment.horizontal in ('left','right','center') else ('right' if isinstance(value,(int,float)) else 'left'),
                         'fontSize':min(15,max(11,cell.font.sz or 11))}})
                 rows.append({'height':min(60,max(25,sheet.row_dimensions[r].height or 25)),'cells':cells})

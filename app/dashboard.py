@@ -348,6 +348,7 @@ def historical_checkins(selected):
                coalesce(r.dealer,p.person->>'dealer',substring(g.code from position('-' in g.code)+1),'') AS dealer,
                concat_ws('-',coalesce(r.region,p.person->>'region',split_part(g.code,'-',1),''),coalesce(r.dealer,p.person->>'dealer',substring(g.code from position('-' in g.code)+1),'')) AS dealer_key,
                p.chat_id,g.title AS group_name,p.latitude,p.longitude,
+               coalesce(trim(substring(form_ev.txt from '(?i)Outlet\\s*Name\\s*[:៖][ \\t]*([^\\n\\r]+)')),'') AS outlet_name,
                coalesce(p.geo->>'province','') AS province,coalesce(p.geo->>'district','') AS district,
                coalesce(p.geo->>'commune','') AS commune,coalesce(p.geo->>'commune_code','') AS commune_code,
                coalesce(p.geo->>'commune_code','') AS location_key,
@@ -380,6 +381,12 @@ def historical_checkins(selected):
           WHERE pe.chat=p.chat_id AND pe.uid=p.telegram_id AND pe.kind='photo'
             AND pe.at BETWEEN p.pin_at-interval '30 minutes' AND p.pin_at+interval '30 minutes'
           ORDER BY abs(extract(epoch from (pe.at-p.pin_at))),pe.mid LIMIT 1) photo ON true
+        LEFT JOIN LATERAL (
+          SELECT fe.data->>'text' AS txt FROM so_events_v1 fe
+          WHERE fe.chat=p.chat_id AND fe.uid=p.telegram_id AND fe.kind IN ('form','photo')
+            AND coalesce(fe.data->>'text','') ~* 'Outlet\\s*Name\\s*[:៖]'
+            AND fe.at BETWEEN p.pin_at-interval '30 minutes' AND p.pin_at+interval '30 minutes'
+          ORDER BY abs(extract(epoch from (fe.at-p.pin_at))),fe.mid LIMIT 1) form_ev ON true
         LEFT JOIN so_groups_v1 g ON g.id=p.chat_id
         WHERE upper(trim(coalesce(r.position,p.person->>'position','SO'))) IN ('SO','SS')
         ORDER BY p.pin_at,p.telegram_id,p.message_id
@@ -400,6 +407,7 @@ def warehouse_checkins(selected):
                v.telegram_id,v.employee_id,v.real_name,v.username,v.position,v.region,v.dealer,
                concat_ws('-',nullif(v.region,''),nullif(v.dealer,'')) AS dealer_key,
                v.chat_id,v.group_name,v.latitude,v.longitude,
+               coalesce(v.outlet_name,'') AS outlet_name,
                coalesce(nullif(v.actual_province,''),v.actual_province_kh,'') AS province,
                coalesce(nullif(v.actual_district,''),v.actual_district_kh,'') AS district,
                coalesce(nullif(v.actual_commune,''),v.actual_commune_kh,'') AS commune,
@@ -711,12 +719,14 @@ def dashboard_road_route(coords: str = Query(..., max_length=4000)):
         return {"geometry": []}
     redis_client = getattr(app.state, "redis", None)
     digest = hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:24]
-    cache_key = f"so-alert:dashboard:road-geom:v1:{digest}"
+    cache_key = f"so-alert:dashboard:road-geom:v2:{digest}"
     cached = _redis_json_response(redis_client, cache_key)
     if cached is not None:
         return cached
     url = f"{ROUTING_URL}/route/v1/driving/{cleaned}?overview=full&geometries=geojson"
     geometry: list[list[float]] = []
+    legs_km: list[float] = []
+    total_km: float | None = None
     try:
         req = urllib.request.Request(url, headers={"User-Agent": ROUTING_USER_AGENT})
         with urllib.request.urlopen(req, timeout=min(8.0, float(ROUTING_TIMEOUT_SECONDS))) as resp:
@@ -725,9 +735,11 @@ def dashboard_road_route(coords: str = Query(..., max_length=4000)):
         if routes and isinstance(routes[0].get("geometry"), dict):
             raw_coords = routes[0]["geometry"].get("coordinates") or []
             geometry = [[round(float(lat), 6), round(float(lon), 6)] for lon, lat in raw_coords]
+            legs_km = [round(float(leg.get("distance") or 0.0) / 1000.0, 2) for leg in (routes[0].get("legs") or [])]
+            total_km = round(float(routes[0].get("distance") or 0.0) / 1000.0, 2)
     except Exception:
         geometry = []
-    payload = {"geometry": geometry}
+    payload = {"geometry": geometry, "legs_km": legs_km, "total_km": total_km}
     if geometry:
         _redis_cache_json(redis_client, cache_key, payload, 3600)
     return payload

@@ -323,6 +323,22 @@ def _collect_range_visits(conn: Session, start_day: date, end_day: date) -> list
     return visits
 
 
+def _is_ready_gp_template(wb) -> bool:
+    """Return True when the loaded workbook already has the full 2-sheet GP template design."""
+    if "Report GP" not in wb.sheetnames or "Report with Dealer" not in wb.sheetnames:
+        return False
+    report = wb["Report GP"]
+    dealer_ws = wb["Report with Dealer"]
+    for sheet in (report, dealer_ws):
+        for col in (12, 16, 20, 24, 28, 32, 36, 40):
+            if [str(sheet.cell(9, col + i).value or "").strip() for i in range(4)] != list(OUTLET_TYPES):
+                return False
+    dealers = [dealer_ws.cell(r, 3).value for r in range(10, 75)]
+    if len(set(dealers)) != 65 or not all(dealers):
+        return False
+    return True
+
+
 def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: Path, output_path: Path, end_day: date | None = None) -> None:
     win_end = end_day or target_day
     visits = _collect_day_visits(conn, target_day) if win_end == target_day else _collect_range_visits(conn, target_day, win_end)
@@ -402,8 +418,64 @@ def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: P
             for mkey, _, _ in REPORT_METRICS:
                 dlr_metrics[(dlr, mkey, ot)] += float(v[mkey])
 
+    date_label = f"Date:{target_day:%d.%m.%Y}" if win_end == target_day else f"Date:{target_day:%d.%m.%Y} - {win_end:%d.%m.%Y}"
+
     if template_path and Path(template_path).exists():
         wb = load_workbook(template_path)
+        if _is_ready_gp_template(wb):
+            # Preserve 100% of the uploaded/bundled template's exact design, styles, merges, widths & heights.
+            for title in list(wb.sheetnames):
+                if title not in ("Report GP", "Report with Dealer"):
+                    del wb[title]
+            report = wb["Report GP"]
+            dealer_ws = wb["Report with Dealer"]
+            _safe_write(report, "B3", date_label)
+            _safe_write(dealer_ws, "B3", date_label)
+
+            # Populate Report GP (R1..R8 in rows 10..17, Grand Total in row 18)
+            for idx in range(8):
+                row_num = 10 + idx
+                reg = str(report.cell(row_num, 2).value or f"R{idx + 1}").strip().upper()
+                _safe_write(report, row_num, 4, reg_so[reg])
+                _safe_write(report, row_num, 5, reg_ss[reg])
+                _safe_write(report, row_num, 6, reg_al[reg])
+                _safe_write(report, row_num, 7, f"=D{row_num}+E{row_num}-F{row_num}")
+                _safe_write(report, row_num, 8, len(reg_districts[reg]))
+                _safe_write(report, row_num, 9, len(reg_communes[reg]))
+                _safe_write(report, row_num, 10, reg_visits[reg])
+                _safe_write(report, row_num, 11, f"=IFERROR(J{row_num}/G{row_num},0)")
+                for mkey, _, start_col in REPORT_METRICS:
+                    for i, ot in enumerate(OUTLET_TYPES):
+                        val = reg_metrics[(reg, mkey, ot)]
+                        _safe_write(report, row_num, start_col + i, int(val) if val == int(val) else round(val, 2))
+            _safe_write(report, 18, 8, len(all_districts))
+            _safe_write(report, 18, 9, len(all_communes))
+            _safe_write(report, 18, 11, "=IFERROR(J18/G18,0)")
+
+            # Populate Report with Dealer (65 dealers in rows 10..74, Grand Total in row 75)
+            for row_num in range(10, 75):
+                dlr = normalized_dealer(dealer_ws.cell(row_num, 3).value)
+                _safe_write(dealer_ws, row_num, 4, dlr_so[dlr])
+                _safe_write(dealer_ws, row_num, 5, dlr_ss[dlr])
+                _safe_write(dealer_ws, row_num, 6, dlr_al[dlr])
+                _safe_write(dealer_ws, row_num, 7, f"=D{row_num}+E{row_num}-F{row_num}")
+                _safe_write(dealer_ws, row_num, 8, len(dlr_districts[dlr]))
+                _safe_write(dealer_ws, row_num, 9, len(dlr_communes[dlr]))
+                _safe_write(dealer_ws, row_num, 10, dlr_visits[dlr])
+                _safe_write(dealer_ws, row_num, 11, f"=IFERROR(J{row_num}/G{row_num},0)")
+                for mkey, _, start_col in REPORT_METRICS:
+                    for i, ot in enumerate(OUTLET_TYPES):
+                        val = dlr_metrics[(dlr, mkey, ot)]
+                        _safe_write(dealer_ws, row_num, start_col + i, int(val) if val == int(val) else round(val, 2))
+            _safe_write(dealer_ws, 75, 8, len(all_districts))
+            _safe_write(dealer_ws, 75, 9, len(all_communes))
+            _safe_write(dealer_ws, 75, 11, "=IFERROR(J75/G75,0)")
+
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            wb.save(output_path)
+            wb.close()
+            return
+
         if "Report GP" not in wb.sheetnames:
             wb.active.title = "Report GP"
         for title in list(wb.sheetnames):
