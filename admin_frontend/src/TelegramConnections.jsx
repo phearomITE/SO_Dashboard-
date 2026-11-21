@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-const labels={morning_talk:'Morning Talk',wrong_plan:'Wrong Plan',over_10km:'Over 10Km',user_al:'User AL',distant_dealer:'Distant Dealer',user_in_wrong_group:'User In Wrong Group',new_user_join:'New User Join',missing_report:'Missing Report',banner_report:'Banner Report'};
+const labels={morning_talk:'Morning Talk',wrong_plan:'Wrong Plan',over_10km:'Over 10Km',user_al:'User AL',distant_dealer:'Distant Dealer',user_in_wrong_group:'User In Wrong Group',new_user_join:'New User Join',missing_report:'Missing Report',banner_report:'Banner Report',parasol:'Parasol'};
 export default function TelegramConnections({api}){
  const [data,setData]=useState(null),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
  const [group,setGroup]=useState({chat_id:'',code:'',topic_id:''});

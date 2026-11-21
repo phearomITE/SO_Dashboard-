@@ -9,7 +9,7 @@ log=logging.getLogger(__name__)
 
 TOPIC_CATEGORIES={
     'morning_talk','wrong_plan','over_10km','user_al','distant_dealer',
-    'user_in_wrong_group','new_user_join','missing_report','banner_report',
+    'user_in_wrong_group','new_user_join','missing_report','banner_report','parasol',
 }
 
 def central_chat_id(s):
@@ -25,7 +25,7 @@ def central_topic_id(s,category=None):
         if runtime.get('topic_id') is not None:return int(runtime['topic_id'] or 0)
         configured=int(CENTRAL_ALERT_TOPIC_IDS.get(category,0) or 0)
         if configured:return configured
-    return CENTRAL_ALERT_TOPIC_ID
+    return 0 if category == 'parasol' else CENTRAL_ALERT_TOPIC_ID
 
 async def send_central_alert(application,key,text,parse_mode=None,category=None):
     """Mirror an operational alert once to Group_SO_Controll."""
@@ -74,7 +74,7 @@ async def send_central_document(application,key,document,filename,caption='',cat
 
 async def copy_central_messages(application,key,source_chat_id,message_ids,category):
     """Serialize banner forwards so concurrent duplicate updates cannot race."""
-    if category == 'banner_report':
+    if category in {'banner_report', 'parasol'}:
         lock=application.bot_data.setdefault('banner_forward_lock',asyncio.Lock())
         async with lock:
             return await _copy_central_messages(application,key,source_chat_id,message_ids,category)
@@ -97,6 +97,9 @@ async def _copy_central_messages(application,key,source_chat_id,message_ids,cate
         chat_id=central_chat_id(s)
         if not chat_id:return None
         topic_id=central_topic_id(s,category)
+    if category == 'parasol' and not topic_id:
+        log.warning('Parasol forwarding skipped: no Parasol topic is configured')
+        return None
     kwargs={}
     if topic_id:kwargs['message_thread_id']=topic_id
     try:
@@ -104,6 +107,10 @@ async def _copy_central_messages(application,key,source_chat_id,message_ids,cate
             chat_id=chat_id,from_chat_id=int(source_chat_id),
             message_ids=message_ids,**kwargs)
         delivered_ids=[getattr(item,'message_id',None) for item in delivered]
+        if len(delivered_ids) != len(message_ids):
+            log.warning('Telegram forwarded %s of %s messages for %s', len(delivered_ids), len(message_ids), key)
+            if not delivered_ids:
+                return None
         with db.session() as s:
             put(s,unique,{
                 'sent':True,'at':db.now().isoformat(),'message_ids':delivered_ids,

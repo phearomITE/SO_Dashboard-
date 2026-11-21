@@ -21,6 +21,7 @@ from app.geo import coordinates_from_text,is_cambodia_coordinate,locate,reverse_
 from app.tracking import analyze_pin_event
 from app.warehouse import import_locations,refresh_warehouse,latest_status
 from app.concurrency import chat_lock
+from app.parasol import collect_parasol_message
 from app.alerts import (send_central_alert,send_central_document,
                         copy_central_messages,TOPIC_CATEGORIES)
 from app.question_settings import get_question_settings,question_enabled,update_question_settings,status_text
@@ -254,13 +255,14 @@ def alert_topic_category(value):
         'user in wrong group':'user_in_wrong_group','user_in_wrong_group':'user_in_wrong_group',
         'new user join':'new_user_join','new_user_join':'new_user_join',
         'missing report':'missing_report','missing_report':'missing_report',
+        'parasol':'parasol',
         'banner report':'banner_report','banner_report':'banner_report','banner':'banner_report',
     }
     key=' '.join(str(value or '').strip().casefold().replace('-',' ').split())
     key=key.replace('_',' ')
     category=aliases.get(key)
     if not category or category not in TOPIC_CATEGORIES:
-        raise ValueError('Unknown category. Use Morning Talk, Wrong Plan, Over 10Km, User AL, Distant Dealer, User In Wrong Group, New User Join, Missing Report, or Banner Report.')
+        raise ValueError('Unknown category. Use Morning Talk, Wrong Plan, Over 10Km, User AL, Distant Dealer, User In Wrong Group, New User Join, Missing Report, Banner Report, or Parasol.')
     return category
 
 def banner_type_value(text):
@@ -432,7 +434,7 @@ async def command(update,context):
                 ('distant_dealer','Distant Dealer'),
                 ('user_in_wrong_group','User In Wrong Group'),
                 ('new_user_join','New User Join'),('missing_report','Missing Report'),
-                ('banner_report','Banner Report'),
+                ('banner_report','Banner Report'),('parasol','Parasol'),
             ]
             central=state(s,'central_alert_chat',{})
             lines=['📌 Central alert topic routing',
@@ -1080,6 +1082,8 @@ async def activity(update,context):
         banner_allowed=bool(banner_group and enabled(banner_group) and
                             (banner_group.topic is None or
                              msg.message_thread_id==banner_group.topic))
+    if banner_allowed:
+        collect_parasol_message(context.application,msg,u.id,text,at)
     if banner_allowed and (msg.photo or
             (msg.document and (msg.document.mime_type or '').startswith('image/'))):
         queue_banner_forward(context.application,msg,text)

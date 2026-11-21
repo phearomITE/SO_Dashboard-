@@ -17,6 +17,7 @@ CENTRAL_ALERT_TOPIC_IDS = {
     'user_in_wrong_group':int(os.getenv('CENTRAL_TOPIC_USER_IN_WRONG_GROUP_ID','0') or 0),
     'new_user_join':int(os.getenv('CENTRAL_TOPIC_NEW_USER_JOIN_ID','0') or 0),
     'missing_report':int(os.getenv('CENTRAL_TOPIC_MISSING_REPORT_ID','0') or 0),
+    'parasol':int(os.getenv('CENTRAL_TOPIC_PARASOL_ID','0') or 0),
     'banner_report':int(os.getenv('CENTRAL_TOPIC_BANNER_REPORT_ID','0') or 0),
 }
 AUTO_RECONCILE_DEALER = os.getenv('AUTO_RECONCILE_DEALER','true').lower() == 'true'
