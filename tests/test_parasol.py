@@ -18,6 +18,7 @@ def test_nonempty_posm(value):
 def test_blank_posm_requires_all_four_fields():
     fields = "POSM: \nWater: 6\nC-Cola: 1\nCB ED : 0.5\nExprez : 1"
     assert parasol.qualifies_for_parasol(FORM + fields)
+    assert parasol.qualifies_for_parasol(FORM + "POSM: \nWater: 5\nC-Cola: 1\nED: 1\nExprez: 1")
     assert not parasol.qualifies_for_parasol(FORM + fields[:-1])
     assert not parasol.qualifies_for_parasol("POSM: 1 parasol")
 

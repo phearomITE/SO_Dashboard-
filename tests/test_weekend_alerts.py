@@ -5,11 +5,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app import db, service
+from app import alerts, bot_control, db, service
 
 
-@pytest.mark.parametrize("day", [21, 22])
-def test_alert_scheduler_runs_saturday_and_sunday(monkeypatch, day):
+@pytest.mark.parametrize("day", [21, 22])  # Saturday, Sunday
+def test_weekend_mutes_alerts_but_keeps_report_forwarding_active(monkeypatch, day):
     db.connect("sqlite:///:memory:")
     try:
         with db.session() as session:
@@ -19,6 +19,49 @@ def test_alert_scheduler_runs_saturday_and_sunday(monkeypatch, day):
             })
         monkeypatch.setattr(service, "enabled", lambda group: True)
         monkeypatch.setattr(db, "now", lambda: datetime(2026, 11, day, 8, 39))
+        monkeypatch.setattr(bot_control, "now", lambda: datetime(2026, 11, day, 8, 39))
+
+        with db.session() as session:
+            ctrl = bot_control.get_bot_control(session)
+            assert ctrl["weekend_muted"] is True
+            assert ctrl["configured_enabled"] is True
+            assert ctrl["enabled"] is False
+            assert bot_control.automation_enabled(session) is False
+
+        check_window = AsyncMock()
+        followups = AsyncMock()
+        monkeypatch.setattr(service, "check_window", check_window)
+        monkeypatch.setattr(service, "followups", followups)
+        app = SimpleNamespace(running=True, updater=SimpleNamespace(running=True),
+                              bot_data={"started": datetime(2026, 11, day, 8)})
+        asyncio.run(service.tick(SimpleNamespace(application=app)))
+        check_window.assert_not_awaited()
+        followups.assert_not_awaited()
+
+        # Report forwarding (Banner_Report / Parasol) must still work on Sat & Sun
+        monkeypatch.setattr(alerts, "central_chat_id", lambda _s: -200)
+        monkeypatch.setattr(alerts, "central_topic_id", lambda _s, _cat: 99)
+        bot = SimpleNamespace(forward_messages=AsyncMock(return_value=[object()]))
+        fwd_app = SimpleNamespace(bot=bot, bot_data={})
+        delivered = asyncio.run(alerts.copy_central_messages(fwd_app, f"parasol:{day}", -100, [10], "parasol"))
+        assert delivered is not None
+        bot.forward_messages.assert_awaited_once()
+    finally:
+        db.engine.dispose()
+
+
+def test_weekday_runs_alert_scheduler(monkeypatch):
+    day = 23  # Monday
+    db.connect("sqlite:///:memory:")
+    try:
+        with db.session() as session:
+            session.add(db.Group(id=-100, title="R1-CA2", code="R1-CA2", active=1))
+            db.put(session, "alert_interval_minutes", {
+                "minutes": 15, "changed_at": datetime(2026, 11, day, 8, 10).isoformat(),
+            })
+        monkeypatch.setattr(service, "enabled", lambda group: True)
+        monkeypatch.setattr(db, "now", lambda: datetime(2026, 11, day, 8, 39))
+        monkeypatch.setattr(bot_control, "now", lambda: datetime(2026, 11, day, 8, 39))
         check_window = AsyncMock()
         monkeypatch.setattr(service, "check_window", check_window)
         monkeypatch.setattr(service, "followups", AsyncMock())

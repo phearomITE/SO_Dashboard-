@@ -9,16 +9,24 @@ from app.db import state,put,now
 
 STATE_KEY='bot_automation_v1'
 
+def is_weekend(at=None):
+    """Return True on Saturday (5) or Sunday (6) in Cambodia time."""
+    current=at or now()
+    return current.weekday() in (5,6)
+
 def get_bot_control(s):
     saved=state(s,STATE_KEY,{})
     paused_until=saved.get('paused_until')
-    try:pause_active=bool(paused_until and datetime.fromisoformat(paused_until)>now())
+    current=now()
+    try:pause_active=bool(paused_until and datetime.fromisoformat(paused_until)>current)
     except (TypeError,ValueError):pause_active=False
+    weekend_muted=is_weekend(current)
     return {
-        'enabled':bool(saved.get('enabled',True)) and not pause_active,
+        'enabled':bool(saved.get('enabled',True)) and not pause_active and not weekend_muted,
         'configured_enabled':bool(saved.get('enabled',True)),
         'paused_until':paused_until,
         'pause_active':pause_active,
+        'weekend_muted':weekend_muted,
         'changed_by':saved.get('changed_by'),
         'changed_at':saved.get('changed_at'),
     }
@@ -47,9 +55,12 @@ def bot_status_text(value):
         until=datetime.fromisoformat(value['paused_until'])
         status='BREAK'
         detail=f'Automatic alerts, questions and acknowledgements are paused until {until:%d/%m/%Y %I:%M %p}.'
+    elif value.get('weekend_muted') and value.get('configured_enabled',True):
+        status='WEEKEND MUTED'
+        detail='Saturday & Sunday: automatic alerts, questions and acknowledgements are paused.'
     else:
         status='RUNNING' if value.get('enabled',True) else 'STOPPED'
-        detail=('Automatic alerts, questions and acknowledgements are active.'
+        detail=('Automatic alerts, questions and acknowledgements are active (Monday–Friday).'
                 if status=='RUNNING' else
                 'Automatic alerts, questions and acknowledgements are paused until /start_bot is used.')
     return (f'Bot automation: {status}\n{detail}\n'

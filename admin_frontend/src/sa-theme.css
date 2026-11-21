@@ -1306,3 +1306,565 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     padding: 0 9px;
   }
 }
+
+/* Operations Overview & Performance Analyst (Dashboard SA) */
+.sa-perf-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sa-perf-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sa-perf-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--sa-muted);
+  margin-bottom: 4px;
+}
+
+.sa-perf-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--sa-heading);
+  line-height: 1.2;
+}
+
+.sa-perf-sub {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--sa-muted);
+}
+
+.sa-perf-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sa-date-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--sa-surface);
+  border: 1px solid var(--sa-border-ctrl);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--sa-muted);
+  font-weight: 600;
+}
+
+.sa-date-pill input {
+  border: 0;
+  background: transparent;
+  color: var(--sa-ink);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0;
+  outline: none;
+}
+
+.sa-btn-emerald {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--sa-emerald);
+  color: #ffffff;
+  border: 1px solid var(--sa-emerald);
+  border-radius: 10px;
+  padding: 9px 15px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.sa-btn-emerald:hover:not(:disabled) {
+  background: var(--sa-emerald-hover);
+}
+
+.sa-btn-emerald:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sa-analyst-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  background: var(--sa-surface);
+  border: 1px solid var(--sa-line);
+  border-radius: 14px;
+  padding: 14px 18px;
+}
+
+.sa-analyst-heading {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--sa-heading);
+}
+
+.sa-analyst-sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--sa-muted);
+}
+
+.sa-analyst-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sa-analyst-filters .field {
+  margin: 0;
+  min-width: 130px;
+}
+
+.sa-analyst-pill-group {
+  display: inline-flex;
+  background: #eff4f2;
+  border: 1px solid var(--sa-line);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.sa-analyst-pill {
+  border: 0;
+  background: transparent;
+  color: var(--sa-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.sa-analyst-pill.active {
+  background: var(--sa-surface);
+  color: var(--sa-emerald);
+  box-shadow: 0 1px 3px rgba(21, 100, 84, 0.12);
+}
+
+.sa-analyst-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.sa-mix-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 18px 18px;
+}
+
+.sa-pie-box {
+  width: 100%;
+  height: 220px;
+}
+
+.sa-mix-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sa-mix-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.sa-mix-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.sa-mix-name {
+  color: var(--sa-ink);
+  font-weight: 500;
+}
+
+.sa-mix-val {
+  color: var(--sa-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-mix-pct {
+  color: var(--sa-muted);
+  font-size: 12px;
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-perf-triple-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.sa-perf-metric-card {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sa-perf-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sa-perf-card-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sa-muted);
+}
+
+.sa-perf-metric-value {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-perf-card-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sa-perf-card-pills span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sa-muted);
+  background: #f2f6f4;
+  border: 1px solid var(--sa-line);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.sa-perf-card-body {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.sa-mini-pie {
+  width: 120px;
+  height: 130px;
+}
+
+.sa-perf-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sa-perf-breakdown-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.sa-breakdown-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sa-ink);
+}
+
+.sa-perf-breakdown-row small {
+  color: var(--sa-muted);
+  min-width: 38px;
+  text-align: right;
+}
+
+.sa-recent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sa-recent-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sa-inline-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--sa-border-ctrl);
+  border-radius: 9px;
+  background: var(--sa-surface);
+  padding: 0 10px;
+  height: 36px;
+  color: var(--sa-muted);
+}
+
+.sa-inline-search input {
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--sa-ink);
+  min-width: 160px;
+}
+
+/* Annual Leave SA Single-Row Toolbar & Table */
+.sa-al-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  border-bottom: 1px solid #edf1ed;
+}
+
+.sa-al-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 210px;
+  min-width: 180px;
+}
+
+.sa-al-search-icon {
+  position: absolute;
+  left: 11px;
+  color: var(--sa-muted);
+  pointer-events: none;
+}
+
+.sa-al-search-wrap input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px 0 33px;
+  border: 1px solid var(--sa-border-ctrl);
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--sa-ink);
+  background: var(--sa-surface);
+}
+
+.sa-al-date-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sa-muted);
+  white-space: nowrap;
+}
+
+.sa-al-date-field input {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--sa-border-ctrl);
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--sa-ink);
+  background: var(--sa-surface);
+}
+
+.sa-al-select {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--sa-border-ctrl);
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--sa-ink);
+  background: var(--sa-surface);
+  min-width: 145px;
+  max-width: 220px;
+}
+
+.sa-al-select-status {
+  min-width: 110px;
+}
+
+.sa-al-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sa-al-status-pill i {
+  font-style: normal;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.sa-al-status-pill.is-no-leave {
+  background: #f2f4f3;
+  color: #5b6e6a;
+}
+
+.sa-al-status-pill.is-on-leave {
+  background: #fdf0e8;
+  color: #c45424;
+}
+
+.sa-al-status-pill.is-scheduled {
+  background: #e6f4ee;
+  color: #156454;
+}
+
+.sa-al-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.sa-al-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--sa-border-ctrl);
+  border-radius: 8px;
+  background: var(--sa-surface);
+  color: var(--sa-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.sa-al-action-btn:hover {
+  background: #f2f7f5;
+  border-color: #b7ccc3;
+}
+
+.sa-al-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #f2cfc0;
+  border-radius: 8px;
+  background: #fff9f6;
+  color: #c45424;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sa-al-cancel-btn:hover:not(:disabled) {
+  background: #fdece4;
+}
+
+.sa-al-cancel-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sa-al-table {
+  min-width: 960px;
+}
+
+/* Responsive Breakpoints for Performance & Annual Leave */
+@media (max-width: 1200px) {
+  .sa-perf-triple-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sa-analyst-main-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .sa-perf-triple-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sa-perf-controls {
+    width: 100%;
+  }
+  .sa-date-pill {
+    flex: 1 1 140px;
+    justify-content: space-between;
+  }
+  .sa-al-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px;
+  }
+  .sa-al-search-wrap {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .sa-al-date-field {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .sa-al-select {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+  .sa-member-count {
+    grid-column: 1 / -1;
+    text-align: right;
+  }
+}
+
+@media (max-width: 520px) {
+  .sa-perf-title {
+    font-size: 21px;
+  }
+  .sa-perf-card-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sa-mini-pie {
+    margin: 0 auto;
+  }
+  .sa-al-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

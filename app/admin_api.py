@@ -405,10 +405,18 @@ def performance(request: Request, start: date, end: date, region: str | None = N
                 dealer: str | None = None, _admin: str = Depends(current_admin)):
     if end < start or (end - start).days > 366:
         raise HTTPException(422, "Date range must be ordered and no longer than 366 days.")
-    cache_key = f"so-dashboard:v1:performance:{start}:{end}:{region or '*'}:{dealer or '*'}"
+    cache_key = f"so-dashboard:v2:performance:{start}:{end}:{region or '*'}:{dealer or '*'}"
     cached = _cache_get(request, cache_key)
     if cached is not None:
         return cached
+    from app.performance_analytics import build_performance_report
+    payload = build_performance_report(db.engine, start, end, region=region, dealer=dealer)
+    _cache_set(request, cache_key, payload, 20)
+    return payload
+
+
+def _legacy_performance_sql(request: Request, start: date, end: date, region: str | None,
+                            dealer: str | None, cache_key: str):
     params: dict[str, Any] = {"start": start, "end": end,
                               "region": region.upper() if region else None,
                               "dealer": dealer.upper() if dealer else None}
@@ -480,11 +488,40 @@ def recent_reason_summary(request: Request, day: date | None = None, region: str
 
 
 @router.get("/admin/al")
-def al_summary(request: Request, day: date, region: str | None = None, dealer: str | None = None,
+def al_summary(request: Request, day: date | None = None, start: date | None = None,
+               end: date | None = None, region: str | None = None, dealer: str | None = None,
                _admin: str = Depends(current_admin)):
+    from app.performance_analytics import build_al_report
+    target_day = day or start or db.now().date()
+    if start and end and (end < start or (end - start).days > 366):
+        raise HTTPException(422, "AL date range must be ordered and no longer than 366 days.")
+    cache_key = f"so-dashboard:v4:al:{target_day}:{start or '*'}:{end or '*'}:{region or '*'}:{dealer or '*'}"
+    cached = _cache_get(request, cache_key)
+    if cached is not None:
+        return cached
+    payload = build_al_report(db.engine, target_day, start=start, end=end, region=region, dealer=dealer)
+    _cache_set(request, cache_key, payload, 5)
+    return payload
+
+
+@router.delete("/admin/al/{employee_id}")
+def cancel_attendance_leave(employee_id: str, request: Request, start: date | None = None,
+                            end: date | None = None, admin: str = Depends(current_admin)):
+    from app.performance_analytics import cancel_employee_leave
+    if start and end and end < start:
+        raise HTTPException(422, "End date must be on or after start date.")
+    with db.Session.begin() as session:
+        result = cancel_employee_leave(session, employee_id, start=start, end=end, actor=admin)
+        if result is None:
+            raise HTTPException(404, "Active employee not found.")
+        _audit(session.connection(), admin, "cancel", "attendance",
+               f"{start or 'now'}:{end or 'future'}:{employee_id}", after=result)
+    invalidate_cache(request)
+    return result
+
+
+def _legacy_al_summary(request: Request, day: date, region: str | None = None, dealer: str | None = None):
     cache_key=f"so-dashboard:v3:al:{day}:{region or '*'}:{dealer or '*'}"
-    cached=_cache_get(request,cache_key)
-    if cached is not None:return cached
     day_start = datetime.combine(day, datetime.min.time())
     day_end = day_start + timedelta(days=1)
     params: dict[str, Any] = {"day": day, "day_start": day_start, "day_end": day_end,

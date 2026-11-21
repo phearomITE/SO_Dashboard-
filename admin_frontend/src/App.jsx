@@ -27,6 +27,10 @@ import {
   TrendUp,
   UserMinus,
   MagnifyingGlass,
+  DownloadSimple,
+  List,
+  X,
+  Check,
 } from "@phosphor-icons/react";
 import {
   ResponsiveContainer,
@@ -39,6 +43,9 @@ import {
   LineChart,
   Line,
   Legend,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 
 async function adminApi(path, options = {}) {
@@ -307,199 +314,438 @@ function LiveMap({ target }) {
   );
 }
 function Performance() {
-  const today = new Intl.DateTimeFormat("en-CA", {timeZone:"Asia/Phnom_Penh",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
-  const [region, setRegion] = useState("All Regions"), [dealer, setDealer] = useState("All Dealers"), [tab, setTab] = useState("Region");
-  const [end, setEnd] = useState(today), [start, setStart] = useState(()=>{const d=new Date(`${today}T00:00:00Z`);d.setUTCDate(d.getUTCDate()-6);return d.toISOString().slice(0,10)});
-  const [report,setReport]=useState(null),[error,setError]=useState(""),[loading,setLoading]=useState(true);
-  useEffect(()=>{
-    let active=true;
-    const q=new URLSearchParams({start,end});
-    if(region!=="All Regions")q.set("region",region);
-    if(dealer!=="All Dealers")q.set("dealer",dealer);
-    setLoading(true);setError("");setReport(null);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Phnom_Penh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const [region, setRegion] = useState("All Regions");
+  const [dealer, setDealer] = useState("All Dealers");
+  const [granularity, setGranularity] = useState("Daily");
+  const [tab, setTab] = useState("SO Summary");
+  const [search, setSearch] = useState("");
+  const [pageIdx, setPageIdx] = useState(1);
+  const [end, setEnd] = useState(today);
+  const [start, setStart] = useState(() => {
+    const d = new Date(`${today}T00:00:00Z`);
+    d.setUTCDate(1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [report, setReport] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const q = new URLSearchParams({ start, end });
+    if (region !== "All Regions") q.set("region", region);
+    if (dealer !== "All Dealers") q.set("dealer", dealer);
+    setLoading(true);
+    setError("");
+    setReport(null);
     adminApi(`/api/v1/admin/performance?${q}`)
-      .then(data=>{if(active)setReport(data)})
-      .catch(e=>{if(active){setReport(null);setError(e.message)}})
-      .finally(()=>{if(active)setLoading(false)});
-    return ()=>{active=false};
-  },[start,end,region,dealer]);
-  const summary=(report?.by_region||[]).filter(x=>region==="All Regions"||x.region===region);
-  const dealerRows=(report?.by_dealer||[]).filter(x=>(region==="All Regions"||x.region===region)&&(dealer==="All Dealers"||x.dealer===dealer));
-  const individualRows=(report?.individuals||[]).filter(x=>(region==="All Regions"||x.region===region)&&(dealer==="All Dealers"||x.dealer===dealer));
-  function exportRows(){const items=tab==="Region"?summary:tab==="Dealer"?dealerRows:individualRows;const csv=[Object.keys(items[0]||{}).join(","),...items.map(x=>Object.values(x).map(v=>`"${String(v??"").replaceAll('"','""')}"`).join(","))].join("\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"}));a.download=`SO_Performance_${tab}_${start}_${end}.csv`;a.click();URL.revokeObjectURL(a.href)}
+      .then((data) => { if (active) setReport(data); })
+      .catch((e) => { if (active) { setReport(null); setError(e.message); } })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [start, end, region, dealer]);
+
+  useEffect(() => { setPageIdx(1); }, [tab, search, region, dealer, start, end]);
+
+  const eyebrowDate = useMemo(() => {
+    try {
+      return new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Phnom_Penh",
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }).format(new Date()).toUpperCase();
+    } catch {
+      return today;
+    }
+  }, [today]);
+
+  const fmtDMY = (iso) => {
+    if (!iso || iso.length < 10) return iso || "";
+    const [y, m, d] = iso.slice(0, 10).split("-");
+    return `${d}/${m}/${y}`;
+  };
+
+  const summary = useMemo(
+    () => (report?.by_region || []).filter((x) => region === "All Regions" || x.region === region),
+    [report, region],
+  );
+  const dealerRows = useMemo(
+    () => (report?.by_dealer || []).filter((x) => (region === "All Regions" || x.region === region) && (dealer === "All Dealers" || x.dealer === dealer)),
+    [report, region, dealer],
+  );
+  const individualRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (report?.individuals || []).filter((x) => {
+      if (region !== "All Regions" && x.region !== region) return false;
+      if (dealer !== "All Dealers" && x.dealer !== dealer) return false;
+      if (q) {
+        const hay = [x.employee_id, x.telegram_id, x.real_name, x.region, x.dealer, x.telegram_group, x.controller].join(" ").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [report, region, dealer, search]);
+
+  const trendSeries = useMemo(() => {
+    const raw = report?.timeline || [];
+    if (granularity === "Daily") return raw;
+    const buckets = new Map();
+    for (const pt of raw) {
+      const d = new Date(`${pt.date}T00:00:00Z`);
+      let key = pt.date;
+      let label = pt.label;
+      if (granularity === "Weekly") {
+        const dayOfWeek = (d.getUTCDay() + 6) % 7;
+        d.setUTCDate(d.getUTCDate() - dayOfWeek);
+        key = d.toISOString().slice(0, 10);
+        label = `Wk ${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`;
+      } else {
+        key = pt.date.slice(0, 7);
+        label = d.toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+      }
+      const cur = buckets.get(key) || { date: key, label, checkins: 0, miss_reports: 0, al_count: 0 };
+      cur.checkins += Number(pt.checkins || 0);
+      cur.miss_reports += Number(pt.miss_reports || 0);
+      cur.al_count += Number(pt.al_count || 0);
+      buckets.set(key, cur);
+    }
+    return [...buckets.values()];
+  }, [report, granularity]);
+
+  const totalCheckins = Number(report?.totals?.checkins ?? 0);
+  const totalMiss = Number(report?.totals?.miss_reports ?? 0);
+  const totalAL = Number(report?.totals?.al_days ?? report?.al_estimate ?? 0);
+  const overallMix = useMemo(() => {
+    const total = totalCheckins + totalMiss + totalAL;
+    const pct = (v) => (total > 0 ? `${((v / total) * 100).toFixed(1)}%` : "0%");
+    return [
+      { name: "Check In", value: totalCheckins, color: "#0353a4", pct: pct(totalCheckins) },
+      { name: "Miss Report", value: totalMiss, color: "#d96b43", pct: pct(totalMiss) },
+      { name: "Annual Leave", value: totalAL, color: "#6366f1", pct: pct(totalAL) },
+    ];
+  }, [totalCheckins, totalMiss, totalAL]);
+
+  const PIE_COLORS = ["#156454", "#0353a4", "#d96b43", "#6366f1", "#16796c", "#e09f3e", "#7a9e9f", "#8d5b4c"];
+  const buildBreakdown = (field) => {
+    const source = region === "All Regions" ? summary : dealerRows;
+    const rows = source
+      .map((r) => ({ name: region === "All Regions" ? r.region : `${r.region}-${r.dealer}`, value: Number(r[field] || 0) }))
+      .filter((r) => r.value > 0)
+      .sort((a, b) => b.value - a.value);
+    const total = rows.reduce((s, r) => s + r.value, 0);
+    return rows.slice(0, 6).map((r, i) => ({
+      ...r,
+      color: PIE_COLORS[i % PIE_COLORS.length],
+      pct: total > 0 ? `${((r.value / total) * 100).toFixed(1)}%` : "0%",
+    }));
+  };
+
+  const checkinBreakdown = useMemo(() => buildBreakdown("checkins"), [summary, dealerRows, region]);
+  const missBreakdown = useMemo(() => buildBreakdown("miss_reports"), [summary, dealerRows, region]);
+  const alBreakdown = useMemo(() => buildBreakdown("al_count"), [summary, dealerRows, region]);
+
+  const pageSize = 20;
+  const totalPages = Math.max(1, Math.ceil(individualRows.length / pageSize));
+  const pagedIndividuals = individualRows.slice((pageIdx - 1) * pageSize, pageIdx * pageSize);
+
+  const initialsOf = (name) =>
+    String(name || "?").trim().split(/\s+/).map((x) => x[0] || "").join("").slice(0, 2).toUpperCase() || "?";
+
+  function exportRows(targetTab = tab) {
+    const items = targetTab === "By Region" ? summary : targetTab === "By Dealer" ? dealerRows : individualRows;
+    if (!items.length) return;
+    const keys = Object.keys(items[0]);
+    const csv = [keys.join(","), ...items.map((x) => keys.map((k) => `"${String(x[k] ?? "").replaceAll('"', '""')}"`).join(","))].join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `SO_Operations_${targetTab.replaceAll(" ", "_")}_${start}_${end}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   return (
-    <>
-      <div className="panel controls">
-        <label className="field">
-          <span>From</span><input type="date" value={start} max={end} onChange={e=>setStart(e.target.value)} />
-        </label>
-        <label className="field"><span>To</span><input type="date" value={end} min={start} max={today} onChange={e=>setEnd(e.target.value)} /></label>
-        <RegionDealerFilters {...{ region, setRegion, dealer, setDealer }} />
-        <button className="secondary" onClick={exportRows} disabled={loading || !report}>Export CSV</button>
-      </div>
-      {error&&<p className="api-error" role="alert">{error}</p>}
-      <div className="metrics">
-        <Metric name="Total Check-ins" value={loading ? "Loading…" : report ? Number(report.totals?.checkins ?? 0).toLocaleString() : "—"} />
-        <Metric name="Districts Visited" value={loading ? "Loading…" : report ? Number(report.totals?.districts ?? 0).toLocaleString() : "—"} />
-        <Metric name="Communes Visited" value={loading ? "Loading…" : report ? Number(report.totals?.communes ?? 0).toLocaleString() : "—"} />
-        <Metric name="Over 10 km / AL" value={loading ? "Loading…" : report ? `${Number(report.totals?.over_10km ?? 0)} / ${Number(report.al_estimate ?? 0)}` : "—"} />
-      </div>
-      <div className="grid2">
-        <div className="panel">
-          <div className="panel-head">
-            <div>
-              <h2>Total Check-in Performance</h2>
-              
-            </div>
-          </div>
-          <div className="chart-wrap">
-            {loading ? <div className="empty" role="status">Loading performance data…</div> : error ? <div className="empty">Performance data is unavailable.</div> :
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={summary}>
-                  <CartesianGrid strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="region" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="checkins" fill="#0353a4" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>}
-          </div>
+    <div className="sa-perf-page">
+      <div className="sa-perf-header">
+        <div>
+          <div className="sa-perf-eyebrow">— {eyebrowDate}</div>
+          <h2 className="sa-perf-title">Operations overview</h2>
+          <p className="sa-perf-sub">A live view of your field team and reporting activity.</p>
         </div>
-        <div className="panel">
-          <div className="panel-head">
-            <div>
-              <h2>Coverage & Exceptions</h2>
-              
-            </div>
-          </div>
-          <div className="chart-wrap">
-            {loading ? <div className="empty" role="status">Loading performance data…</div> : error ? <div className="empty">Performance data is unavailable.</div> :
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={summary.map((r) => ({r:r.region,district:r.districts,commune:r.communes,over:r.over_10km,active:r.active_sale}))}
-                >
-                  <CartesianGrid strokeDasharray="4 4" />
-                  <XAxis dataKey="r" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line dataKey="district" stroke="#0353a4" strokeWidth={3} />
-                  <Line dataKey="commune" stroke="#16796c" strokeWidth={3} />
-                  <Line dataKey="over" stroke="#d96b43" strokeWidth={3} />
-                  <Line dataKey="active" stroke="#6366f1" strokeWidth={3} />
-                </LineChart>
-              </ResponsiveContainer>}
-          </div>
+        <div className="sa-perf-controls">
+          <label className="sa-date-pill">
+            <span>From Date</span>
+            <input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} />
+          </label>
+          <label className="sa-date-pill">
+            <span>To Date</span>
+            <input type="date" value={end} min={start} max={today} onChange={(e) => setEnd(e.target.value)} />
+          </label>
+          <button type="button" className="sa-btn-emerald" onClick={() => exportRows("SO Summary")} disabled={loading || !report}>
+            <DownloadSimple size={16} weight="bold" />
+            <span>Export report</span>
+          </button>
         </div>
       </div>
-      <div className="panel" style={{ marginTop: 16 }}>
-        <div className="panel-head">
-          <div>
-            <h2>Performance Drill-down</h2>
-            
-          </div>
-          <div className="tabs">
-            {["Region", "Dealer", "Individual Sale"].map((t) => (
-              <button
-                key={t}
-                className={tab === t ? "active" : ""}
-                onClick={() => setTab(t)}
-              >
-                {t}
-              </button>
+
+      {error && <p className="api-error" role="alert">{error}</p>}
+
+      <div className="sa-analyst-bar">
+        <div>
+          <h3 className="sa-analyst-heading">Performance Analyst</h3>
+          <p className="sa-analyst-sub">{fmtDMY(start)} – {fmtDMY(end)} · Check In, Miss Report &amp; Annual Leave</p>
+        </div>
+        <div className="sa-analyst-filters">
+          <RegionDealerFilters {...{ region, setRegion, dealer, setDealer }} />
+          <div className="sa-analyst-pill-group" role="tablist" aria-label="Time granularity">
+            {["Daily", "Weekly", "Monthly"].map((g) => (
+              <button key={g} type="button" role="tab" aria-selected={granularity === g}
+                className={`sa-analyst-pill ${granularity === g ? "active" : ""}`}
+                onClick={() => setGranularity(g)}>{g}</button>
             ))}
           </div>
         </div>
-        <div className="table-wrap" style={{ maxHeight: 420 }}>
-          {tab === "Region" ? (
+      </div>
+
+      <div className="sa-analyst-main-grid">
+        <div className="panel sa-card-unified">
+          <div className="panel-head">
+            <div>
+              <h2>Activity Trend ({granularity})</h2>
+              <p>Check In, Miss Report &amp; Annual Leave over time</p>
+            </div>
+          </div>
+          <div className="chart-wrap">
+            {loading ? <div className="empty" role="status">Loading performance trend…</div> : error ? <div className="empty">Data unavailable.</div> : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={trendSeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e6eeea" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#677975" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "#677975" }} />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="checkins" name="Check In" stroke="#0353a4" strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="miss_reports" name="Miss Report" stroke="#d96b43" strokeWidth={2.5} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="al_count" name="Annual Leave" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="panel sa-card-unified">
+          <div className="panel-head">
+            <div>
+              <h2>Overall Mix · Pie Chart</h2>
+              <p>Share of Check In, Miss Report &amp; Annual Leave</p>
+            </div>
+          </div>
+          <div className="sa-mix-body">
+            {loading ? <div className="empty" role="status">Loading mix…</div> : error ? <div className="empty">Data unavailable.</div> : (
+              <>
+                <div className="sa-pie-box">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={overallMix} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={54} outerRadius={84} paddingAngle={2}>
+                        {overallMix.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="sa-mix-legend">
+                  {overallMix.map((item) => (
+                    <div className="sa-mix-row" key={item.name}>
+                      <span className="sa-mix-dot" style={{ background: item.color }} />
+                      <span className="sa-mix-name">{item.name}</span>
+                      <strong className="sa-mix-val">{item.value.toLocaleString()}</strong>
+                      <span className="sa-mix-pct">{item.pct}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="sa-perf-triple-grid">
+        {[
+          { title: "Performance Check In", total: totalCheckins, accent: "#0353a4", rows: checkinBreakdown },
+          { title: "Performance Miss Report", total: totalMiss, accent: "#d96b43", rows: missBreakdown },
+          { title: "Performance AL", total: totalAL, accent: "#6366f1", rows: alBreakdown },
+        ].map((card) => (
+          <div className="panel sa-card-unified sa-perf-metric-card" key={card.title}>
+            <div className="sa-perf-card-top">
+              <div>
+                <div className="sa-perf-card-label">{card.title}</div>
+                <div className="sa-perf-metric-value" style={{ color: card.accent }}>
+                  {loading ? "…" : card.total.toLocaleString()}
+                </div>
+              </div>
+              <div className="sa-perf-card-pills">
+                <span>{granularity}</span>
+                <span>{region === "All Regions" ? "All Regions" : region}</span>
+              </div>
+            </div>
+            {loading ? <div className="empty">Loading…</div> : card.rows.length ? (
+              <div className="sa-perf-card-body">
+                <div className="sa-mini-pie">
+                  <ResponsiveContainer width="100%" height={130}>
+                    <PieChart>
+                      <Pie data={card.rows} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={30} outerRadius={52} paddingAngle={2}>
+                        {card.rows.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="sa-perf-mini-list">
+                  {card.rows.map((r) => (
+                    <div className="sa-perf-breakdown-row" key={r.name}>
+                      <span className="sa-mix-dot" style={{ background: r.color }} />
+                      <span className="sa-breakdown-name">{r.name}</span>
+                      <b>{r.value.toLocaleString()}</b>
+                      <small>{r.pct}</small>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : <div className="empty">No records in range.</div>}
+          </div>
+        ))}
+      </div>
+
+      <div className="panel sa-card-unified" style={{ marginTop: 16 }}>
+        <div className="panel-head sa-recent-head">
+          <div>
+            <h2>Recent activity · SO Visit &amp; Miss Summary</h2>
+            <p>{individualRows.length.toLocaleString()} SO in view · {summary.length} regions · {dealerRows.length} dealers</p>
+          </div>
+          <div className="sa-recent-tools">
+            <div className="tabs">
+              {["SO Summary", "By Region", "By Dealer"].map((t) => (
+                <button key={t} type="button" className={tab === t ? "active" : ""} onClick={() => setTab(t)}>{t}</button>
+              ))}
+            </div>
+            {tab === "SO Summary" && (
+              <div className="sa-inline-search">
+                <MagnifyingGlass size={15} />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search SO, ID, group…" />
+              </div>
+            )}
+            <button type="button" className="secondary" onClick={() => exportRows(tab)} disabled={loading || !report}>Export CSV</button>
+          </div>
+        </div>
+
+        <div className="table-wrap">
+          {tab === "By Region" ? (
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Region</th>
-                  <th>Dealers</th>
-                  <th>Total Check-in</th>
-                  <th>District Visit</th>
-                  <th>Commune Visit</th>
-                  <th>Over 10 km</th>
-                  <th>AL</th>
-                  <th>Completion</th>
+                  <th>Region</th><th>Roster</th><th>Active SO</th><th>Check-ins</th><th>Miss Reports</th>
+                  <th>Districts</th><th>Communes</th><th>Over 10 km</th><th>AL</th><th>Completion</th>
                 </tr>
               </thead>
               <tbody>
                 {summary.map((r) => (
                   <tr key={r.region}>
-                    <td>
-                      <span className="region-tag">{r.region}</span>
-                    </td>
-                    <td>{dealerGroups[r.region]?.length||0}</td>
-                    <td>
-                      <b>{Number(r.checkins).toLocaleString()}</b>
-                    </td>
-                    <td>{r.districts}</td><td>{r.communes}</td><td>{r.over_10km}</td><td>{r.al_count}</td><td><span className="status">{r.roster_count ? `${Math.round(100*r.active_sale/r.roster_count)}%` : "—"}</span></td>
+                    <td><span className="region-tag">{r.region}</span></td>
+                    <td>{r.roster_count}</td>
+                    <td>{r.active_sale}</td>
+                    <td><b>{Number(r.checkins).toLocaleString()}</b></td>
+                    <td>{Number(r.miss_reports || 0).toLocaleString()}</td>
+                    <td>{r.districts}</td><td>{r.communes}</td><td>{r.over_10km}</td><td>{r.al_count}</td>
+                    <td><span className="status">{r.roster_count ? `${Math.round((100 * r.active_sale) / r.roster_count)}%` : "—"}</span></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          ) : tab === "Dealer" ? (
+          ) : tab === "By Dealer" ? (
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Region</th>
-                  <th>Dealer</th>
-                  <th>Total Check-in</th>
-                  <th>District Visit</th>
-                  <th>Commune Visit</th>
-                  <th>Over 10 km</th>
-                  <th>AL</th>
+                  <th>Region</th><th>Dealer</th><th>Roster</th><th>Active SO</th><th>Check-ins</th>
+                  <th>Miss Reports</th><th>Districts</th><th>Communes</th><th>Over 10 km</th><th>AL</th>
                 </tr>
               </thead>
               <tbody>
                 {dealerRows.map((r) => (
-                    <tr key={`${r.region}-${r.dealer}`}>
-                      <td>{r.region}</td>
-                      <td>
-                        <span className="dealer-tag">{r.dealer}</span>
-                      </td>
-                      <td><b>{r.checkins}</b></td><td>{r.districts}</td><td>{r.communes}</td><td>{r.over_10km}</td><td>{r.al_count}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          ) : (
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Employee ID</th>
-                  <th>Sale Name</th>
-                  <th>Region</th>
-                  <th>Dealer</th>
-                  <th>Check-ins</th>
-                  <th>District</th>
-                  <th>Commune</th>
-                  <th>Over 10 km</th>
-                  <th>Attendance</th>
-                </tr>
-              </thead>
-              <tbody>
-                {individualRows.map((x) => (
-                  <tr key={`${x.employee_id}-${x.region}-${x.dealer}`}>
-                    <td>{x.employee_id}</td>
-                    <td>
-                      <b>{x.real_name}</b>
-                    </td>
-                    <td>{x.region}</td>
-                    <td>
-                      <span className="dealer-tag">{x.dealer}</span>
-                    </td>
-                    <td>{x.checkins}</td><td>{x.districts}</td><td>{x.communes}</td><td>{x.over_10km}</td><td>{x.attendance}</td>
+                  <tr key={`${r.region}-${r.dealer}`}>
+                    <td>{r.region}</td>
+                    <td><span className="dealer-tag">{r.dealer}</span></td>
+                    <td>{r.roster_count}</td><td>{r.active_sale}</td>
+                    <td><b>{Number(r.checkins).toLocaleString()}</b></td>
+                    <td>{Number(r.miss_reports || 0).toLocaleString()}</td>
+                    <td>{r.districts}</td><td>{r.communes}</td><td>{r.over_10km}</td><td>{r.al_count}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          ) : (
+            <>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>SO NAME</th><th>EMPLOYEE ID</th><th>TELEGRAM ID</th><th>GROUP</th><th>CONTROLLER</th>
+                    <th>CHECK IN</th><th>MISS REPORT</th><th>AL</th><th>OVER 10 KM</th><th>STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr><td className="empty" colSpan={10}>Loading SO summary…</td></tr>
+                  ) : pagedIndividuals.length ? pagedIndividuals.map((x) => (
+                    <tr key={`${x.employee_id || x.telegram_id}-${x.region}-${x.dealer}`}>
+                      <td>
+                        <div className="sa-name-cell">
+                          <div className="sa-avatar">
+                            <span>{initialsOf(x.real_name)}</span>
+                            {x.telegram_id && (
+                              <img src={`/api/v1/dashboard/telegram-avatar/${encodeURIComponent(x.telegram_id)}`} alt="" loading="lazy"
+                                onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                            )}
+                          </div>
+                          <div className="sa-name-copy">
+                            <b>{x.real_name}</b>
+                            <small>{x.position || "SO"} · {x.dealer || "—"}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="sa-mono">{x.employee_id || "—"}</td>
+                      <td className="sa-mono">{x.telegram_id || "—"}</td>
+                      <td>{x.telegram_group || `${x.region}-${x.dealer}`}</td>
+                      <td>{x.controller || "—"}</td>
+                      <td><b>{Number(x.checkins || 0).toLocaleString()}</b></td>
+                      <td>{Number(x.miss_count || 0).toLocaleString()}</td>
+                      <td>{Number(x.al_days || 0)}</td>
+                      <td>{Number(x.over_10km || 0)}</td>
+                      <td>
+                        <span className={`sa-al-status-pill ${x.attendance === "Present" ? "is-scheduled" : x.attendance === "AL" ? "is-on-leave" : "is-no-leave"}`}>
+                          <i>•</i> {x.attendance}
+                        </span>
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr><td className="empty" colSpan={10}>No matching SO records for this period.</td></tr>
+                  )}
+                </tbody>
+              </table>
+              {individualRows.length > pageSize && (
+                <div className="plan-pagination" style={{ padding: "12px 16px", borderTop: "1px solid #edf1ed" }}>
+                  <span>Showing {(pageIdx - 1) * pageSize + 1}–{Math.min(pageIdx * pageSize, individualRows.length)} of {individualRows.length}</span>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="button" className="secondary" disabled={pageIdx <= 1} onClick={() => setPageIdx((p) => Math.max(1, p - 1))}>Previous</button>
+                    <button type="button" className="secondary" disabled={pageIdx >= totalPages} onClick={() => setPageIdx((p) => Math.min(totalPages, p + 1))}>Next</button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -1009,13 +1255,13 @@ function SettingsPage() {
   useEffect(()=>{
     let active=true;
     adminApi("/api/v1/admin/settings")
-      .then(x=>{if(active)setS({...x.questions,automation_enabled:x.automation.enabled,alert_interval_minutes:x.alert_interval_minutes})})
+      .then(x=>{if(active)setS({...x.questions,automation_enabled:x.automation.configured_enabled ?? x.automation.enabled,weekend_muted:Boolean(x.automation.weekend_muted),alert_interval_minutes:x.alert_interval_minutes})})
       .catch(e=>{if(active)setError(e.message)})
       .finally(()=>{if(active)setSettingsLoading(false)});
     refreshTunnel();
     return ()=>{active=false};
   },[]);
-  async function change(key,value){if(!s||saving)return;setError("");const before=s[key];setS(x=>({...x,[key]:value}));setSaving(true);try{const result=await adminApi("/api/v1/admin/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({[key]:value})});setS({...result.questions,automation_enabled:result.automation.enabled,alert_interval_minutes:result.alert_interval_minutes})}catch(e){setS(x=>({...x,[key]:before}));setError(e.message)}finally{setSaving(false)}}
+  async function change(key,value){if(!s||saving)return;setError("");const before=s[key];setS(x=>({...x,[key]:value}));setSaving(true);try{const result=await adminApi("/api/v1/admin/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({[key]:value})});setS(prev=>({...result.questions,automation_enabled:result.automation.configured_enabled ?? result.automation.enabled,weekend_muted:Boolean(result.automation.weekend_muted ?? prev?.weekend_muted),alert_interval_minutes:result.alert_interval_minutes}))}catch(e){setS(x=>({...x,[key]:before}));setError(e.message)}finally{setSaving(false)}}
   return (
     <>
     <TelegramConnections api={adminApi}/>
@@ -1023,12 +1269,12 @@ function SettingsPage() {
       <div className="panel-head" style={{ paddingLeft: 0, paddingRight: 0 }}>
         <div>
           <h2>Alert Rules & Automation</h2>
-          
+          <p>{s?.weekend_muted ? "Saturday & Sunday mode: automatic alerts & questions are muted; report forwarding (Banner/Parasol) and dashboard tracking remain active." : "Monday–Friday: alert rules & automation run normally. Saturday–Sunday: alerts are muted while report forwarding & dashboard tracking stay active."}</p>
         </div>
       </div>
       {error&&<p className="api-error" role="alert">{error}</p>}
       {settingsLoading ? <div className="empty" role="status">Loading persisted settings…</div> : !s ? <div className="empty">Settings could not be loaded. Correct the API/database error before changing bot automation.</div> : <>
-      <div className="settings-row"><div><b>Alert check interval</b><small>Monday to Sunday, Cambodia time</small></div><select disabled={saving} value={s.alert_interval_minutes} onChange={e=>change("alert_interval_minutes",Number(e.target.value))}>{[5,10,15,20,25,30,35,40,45,50,55,60].map(v=><option key={v} value={v}>{v} minutes</option>)}</select></div>
+      <div className="settings-row"><div><b>Alert check interval</b><small>Monday to Friday alerts (Cambodia time) · Sat &amp; Sun alerts muted automatically</small></div><select disabled={saving} value={s.alert_interval_minutes} onChange={e=>change("alert_interval_minutes",Number(e.target.value))}>{[5,10,15,20,25,30,35,40,45,50,55,60].map(v=><option key={v} value={v}>{v} minutes</option>)}</select></div>
       {[
         [
           "wrong_plan",
@@ -1078,20 +1324,22 @@ function ReasonSummary() {
 }
 
 function ALPage() {
-  const [region, setRegion] = useState("All Regions");
-  const [dealer, setDealer] = useState("All Dealers");
   const initialDay = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Phnom_Penh",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
-  const [date, setDate] = useState(initialDay);
+  const [fromDate, setFromDate] = useState(initialDay);
+  const [toDate, setToDate] = useState(initialDay);
   const [attendanceSearch, setAttendanceSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState("All Telegram groups");
+  const [controllerFilter, setControllerFilter] = useState("All controllers");
   const [status, setStatus] = useState("All SO");
   const [rows, setRows] = useState([]);
+  const [controllers, setControllers] = useState([]);
   const [scheduledCount, setScheduledCount] = useState(0);
+  const [cancellingId, setCancellingId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState("");
@@ -1112,9 +1360,9 @@ function ALPage() {
   const [rangeReportLoading, setRangeReportLoading] = useState(false);
 
   async function loadRows() {
-    const q = new URLSearchParams({ day: date });
-    if (region !== "All Regions") q.set("region", region);
-    if (dealer !== "All Dealers") q.set("dealer", dealer);
+    const q = new URLSearchParams({ day: fromDate || initialDay });
+    if (fromDate) q.set("start", fromDate);
+    if (toDate && toDate >= fromDate) q.set("end", toDate);
     setLoading(true);
     setError("");
     try {
@@ -1130,17 +1378,23 @@ function ALPage() {
           role: x.position,
           attendance: x.attendance,
           leaveStatus: x.leave_status || "",
+          leaveTypeLabel: x.leave_type_label || "—",
           leaveFrom: x.leave_from || "",
           leaveTo: x.leave_to || "",
+          statusKind: x.status_kind || (x.leave_status ? "on_leave" : "no_leave"),
+          statusLabel: x.status_label || (x.leave_status ? "On leave" : "No leave"),
           hasCheckin: x.has_checkin,
           fullDayConflict: x.full_day_conflict,
           telegramGroup: x.telegram_group,
+          controller: x.controller || "—",
           source: x.source,
         })),
       );
+      setControllers(Array.isArray(payload?.controllers) ? payload.controllers : []);
       setScheduledCount(Number(payload?.scheduled_count ?? 0));
     } catch (e) {
       setRows([]);
+      setControllers([]);
       setScheduledCount(0);
       setError(e.message);
     } finally {
@@ -1150,7 +1404,7 @@ function ALPage() {
 
   useEffect(() => {
     loadRows();
-  }, [date, region, dealer]);
+  }, [fromDate, toDate]);
 
   const groupOptions = useMemo(
     () =>
@@ -1160,26 +1414,30 @@ function ALPage() {
     [rows],
   );
 
+  const controllerOptions = useMemo(() => {
+    const seen = new Set(controllers);
+    for (const r of rows) {
+      if (r.controller && r.controller !== "—") {
+        for (const part of r.controller.split(",")) {
+          const clean = part.trim();
+          if (clean) seen.add(clean);
+        }
+      }
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  }, [controllers, rows]);
+
   const attendanceFiltered = useMemo(() => {
     const q = attendanceSearch.trim().toLowerCase();
     return rows
       .filter((r) => {
-        if (region !== "All Regions" && r.region !== region) return false;
-        if (dealer !== "All Dealers" && r.dealer !== dealer) return false;
         if (groupFilter !== "All Telegram groups" && r.telegramGroup !== groupFilter) return false;
-        if (status === "On annual leave" && !r.leaveStatus) return false;
-        if (status === "Not on leave" && Boolean(r.leaveStatus)) return false;
-        if (
-          status !== "All SO" &&
-          status !== "On annual leave" &&
-          status !== "Not on leave" &&
-          r.attendance !== status &&
-          r.leaveStatus !== status
-        ) {
-          return false;
-        }
+        if (controllerFilter !== "All controllers" && !String(r.controller || "").includes(controllerFilter)) return false;
+        if (status === "On leave" && r.statusKind !== "on_leave") return false;
+        if (status === "Scheduled" && r.statusKind !== "scheduled") return false;
+        if (status === "No leave" && r.statusKind !== "no_leave") return false;
         if (q) {
-          const hay = [r.id, r.telegramId, r.name, r.telegramGroup, r.region, r.dealer]
+          const hay = [r.id, r.telegramId, r.name, r.telegramGroup, r.controller, r.region, r.dealer]
             .join(" ")
             .toLowerCase();
           if (!hay.includes(q)) return false;
@@ -1192,25 +1450,56 @@ function ALPage() {
           a.region.localeCompare(b.region) ||
           a.dealer.localeCompare(b.dealer),
       );
-  }, [rows, region, dealer, groupFilter, status, attendanceSearch]);
+  }, [rows, groupFilter, controllerFilter, status, attendanceSearch]);
 
-  const alCount = attendanceFiltered.filter((r) => Boolean(r.leaveStatus)).length;
+  const alCount = attendanceFiltered.filter((r) => r.statusKind === "on_leave").length;
+  const scheduledFilteredCount = attendanceFiltered.filter((r) => r.statusKind === "scheduled").length;
+
+  const fmtLeaveDates = (fromIso, toIso) => {
+    if (!fromIso) return "—";
+    const fmt = (iso) => {
+      try {
+        return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+          month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+        });
+      } catch { return iso; }
+    };
+    if (!toIso || toIso === fromIso) return fmt(fromIso);
+    return `${fmt(fromIso)} – ${fmt(toIso)}`;
+  };
+
+  async function handleCancelLeave(row) {
+    if (!row || cancellingId) return;
+    if (!window.confirm(`Cancel annual leave for ${row.name}?`)) return;
+    setCancellingId(row.id);
+    setError("");
+    setSuccess("");
+    try {
+      const q = new URLSearchParams();
+      if (row.leaveFrom) q.set("start", row.leaveFrom);
+      if (row.leaveTo) q.set("end", row.leaveTo);
+      const qs = q.toString() ? `?${q}` : "";
+      await adminApi(`/api/v1/admin/al/${encodeURIComponent(row.id)}${qs}`, { method: "DELETE" });
+      setSuccess(`Annual leave cancelled for ${row.name}.`);
+      await loadRows();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setCancellingId("");
+    }
+  }
 
   function openLeaveModal(row) {
     setModalRow(row);
     setModalError("");
-    if (row.leaveFrom && row.leaveTo && row.leaveTo !== row.leaveFrom) {
+    if (row.leaveFrom && row.leaveTo) {
       setModalType("AL Date Range");
       setModalStart(row.leaveFrom);
       setModalEnd(row.leaveTo);
-    } else if (row.leaveStatus === "AL Morning" || row.leaveStatus === "AL Afternoon" || row.leaveStatus === "AL Full Day") {
-      setModalType("AL Date Range");
-      setModalStart(row.leaveFrom || date);
-      setModalEnd(row.leaveTo || date);
     } else {
       setModalType("AL Date Range");
-      setModalStart(date);
-      setModalEnd(date);
+      setModalStart(fromDate || initialDay);
+      setModalEnd(toDate && toDate >= fromDate ? toDate : (fromDate || initialDay));
     }
   }
 
@@ -1290,8 +1579,6 @@ function ALPage() {
       return;
     }
     const q = new URLSearchParams({ start: rangeFrom, end: rangeTo });
-    if (region !== "All Regions") q.set("region", region);
-    if (dealer !== "All Dealers") q.set("dealer", dealer);
     setRangeReportLoading(true);
     try {
       const result = await adminApi(`/api/v1/admin/al/range?${q}`);
@@ -1352,7 +1639,7 @@ function ALPage() {
           <span>On annual leave now</span>
         </div>
         <div className="sa-al-kpi">
-          <strong>{loading ? "…" : error ? "—" : scheduledCount}</strong>
+          <strong>{loading ? "…" : error ? "—" : (scheduledFilteredCount || scheduledCount)}</strong>
           <span>Scheduled leave</span>
         </div>
         <div className="sa-al-kpi">
@@ -1362,128 +1649,167 @@ function ALPage() {
       </div>
 
       <section className="panel sa-card-unified">
-        <div className="sa-filter-bar">
-          <label className="field sa-filter-search">
-            <span>Search SO</span>
+        <div className="sa-al-toolbar">
+          <div className="sa-al-search-wrap">
+            <MagnifyingGlass size={15} className="sa-al-search-icon" />
             <input
               value={attendanceSearch}
               onChange={(e) => setAttendanceSearch(e.target.value)}
-              placeholder="Search SO, Employee ID or Telegram ID…"
+              placeholder="Search SO or Telegram ID…"
+              aria-label="Search SO or Telegram ID"
+            />
+          </div>
+          <label className="sa-al-date-field">
+            <span>From Date</span>
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => {
+                const v = e.target.value;
+                setFromDate(v);
+                if (toDate && v && toDate < v) setToDate(v);
+              }}
             />
           </label>
-          <label className="field">
-            <span>Date</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <label className="sa-al-date-field">
+            <span>To Date</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => setToDate(e.target.value)}
+            />
           </label>
-          <RegionDealerFilters {...{ region, setRegion, dealer, setDealer }} />
-          <label className="field">
-            <span>Group</span>
-            <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
-              <option value="All Telegram groups">All Telegram groups</option>
-              {groupOptions.map((g) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Filter</span>
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="All SO">All SO</option>
-              <option value="On annual leave">On annual leave</option>
-              <option value="Not on leave">Not on leave</option>
-              <option value="Present">Present</option>
-              <option value="Not Reported">Not Reported</option>
-              <option value="Scheduled">Scheduled</option>
-              <option value="AL Full Day">AL Full Day</option>
-              <option value="AL Morning">AL Morning</option>
-              <option value="AL Afternoon">AL Afternoon</option>
-            </select>
-          </label>
+          <select
+            className="sa-al-select"
+            value={groupFilter}
+            onChange={(e) => setGroupFilter(e.target.value)}
+            aria-label="Filter by Telegram group"
+          >
+            <option value="All Telegram groups">All Telegram groups</option>
+            {groupOptions.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+          <select
+            className="sa-al-select"
+            value={controllerFilter}
+            onChange={(e) => setControllerFilter(e.target.value)}
+            aria-label="Filter by controller"
+          >
+            <option value="All controllers">All controllers</option>
+            {controllerOptions.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <select
+            className="sa-al-select sa-al-select-status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            aria-label="Filter by leave status"
+          >
+            <option value="All SO">All SO</option>
+            <option value="On leave">On leave</option>
+            <option value="Scheduled">Scheduled</option>
+            <option value="No leave">No leave</option>
+          </select>
           <span className="sa-member-count">{attendanceFiltered.length} members</span>
         </div>
 
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table sa-al-table">
             <thead>
               <tr>
                 <th>SO NAME</th>
-                <th>EMPLOYEE ID</th>
                 <th>TELEGRAM ID</th>
                 <th>GROUP</th>
-                <th>ATTENDANCE / LEAVE</th>
-                <th>CHECK-IN</th>
+                <th>CONTROLLER</th>
+                <th>LEAVE TYPE</th>
+                <th>DATES</th>
+                <th>STATUS</th>
                 <th>ACTION</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="empty" colSpan={7}>
+                  <td className="empty" colSpan={8}>
                     Loading SO roster…
                   </td>
                 </tr>
               ) : (
-                attendanceFiltered.map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      <div className="sa-name-cell">
-                        <div className="sa-avatar">
-                          <span>{initialsOf(r.name)}</span>
-                          {r.telegramId && (
-                            <img
-                              src={`/api/v1/dashboard/telegram-avatar/${encodeURIComponent(r.telegramId)}`}
-                              alt=""
-                              loading="lazy"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
-                            />
+                attendanceFiltered.map((r) => {
+                  const hasLeave = r.statusKind === "on_leave" || r.statusKind === "scheduled";
+                  const pillCls =
+                    r.statusKind === "on_leave"
+                      ? "is-on-leave"
+                      : r.statusKind === "scheduled"
+                        ? "is-scheduled"
+                        : "is-no-leave";
+                  return (
+                    <tr key={r.id}>
+                      <td>
+                        <div className="sa-name-cell">
+                          <div className="sa-avatar">
+                            <span>{initialsOf(r.name)}</span>
+                            {r.telegramId && (
+                              <img
+                                src={`/api/v1/dashboard/telegram-avatar/${encodeURIComponent(r.telegramId)}`}
+                                alt=""
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                }}
+                              />
+                            )}
+                          </div>
+                          <div className="sa-name-copy">
+                            <b>{r.name}</b>
+                            <small>
+                              {r.role || "SO"} · {r.dealer || "—"}
+                            </small>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="sa-mono">{r.telegramId || r.id || "—"}</td>
+                      <td>{r.telegramGroup || `${r.region}-${r.dealer}`}</td>
+                      <td>{r.controller || "—"}</td>
+                      <td>{r.leaveTypeLabel || "—"}</td>
+                      <td>{fmtLeaveDates(r.leaveFrom, r.leaveTo)}</td>
+                      <td>
+                        <span className={`sa-al-status-pill ${pillCls}`}>
+                          <i>•</i> {r.statusLabel}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="sa-al-actions">
+                          <button
+                            type="button"
+                            className="sa-al-action-btn"
+                            onClick={() => openLeaveModal(r)}
+                          >
+                            <CalendarBlank size={14} weight="bold" />
+                            <span>{hasLeave ? "Edit AL" : "Set AL"}</span>
+                          </button>
+                          {hasLeave && (
+                            <button
+                              type="button"
+                              className="sa-al-cancel-btn"
+                              disabled={cancellingId === r.id}
+                              onClick={() => handleCancelLeave(r)}
+                            >
+                              {cancellingId === r.id ? "Cancelling…" : "Cancel AL"}
+                            </button>
                           )}
                         </div>
-                        <div className="sa-name-copy">
-                          <b>{r.name}</b>
-                          <small>
-                            {r.role || "SO"} · {r.dealer || "—"}
-                          </small>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="sa-mono">{r.id || "—"}</td>
-                    <td className="sa-mono">{r.telegramId || "—"}</td>
-                    <td>{r.telegramGroup || `${r.region}-${r.dealer}`}</td>
-                    <td>
-                      <span
-                        className={
-                          "status " +
-                          (r.leaveStatus ? "danger" : "") +
-                          (r.fullDayConflict ? " status-conflict" : "")
-                        }
-                      >
-                        {r.fullDayConflict
-                          ? "AL Full Day · Check-in conflict"
-                          : r.leaveStatus && r.leaveFrom && r.leaveTo && r.leaveTo !== r.leaveFrom
-                            ? `${r.leaveStatus} (${r.leaveFrom} → ${r.leaveTo})`
-                            : r.attendance}
-                      </span>
-                    </td>
-                    <td>{r.hasCheckin ? "Yes" : "No"}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="secondary sa-set-leave-btn"
-                        onClick={() => openLeaveModal(r)}
-                      >
-                        {r.leaveStatus ? "Edit leave" : "Set leave"}
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                    </tr>
+                  );
+                })
               )}
               {!loading && !error && attendanceFiltered.length === 0 && (
                 <tr>
-                  <td className="empty" colSpan={7}>
+                  <td className="empty" colSpan={8}>
                     No matching SO members.
                   </td>
                 </tr>

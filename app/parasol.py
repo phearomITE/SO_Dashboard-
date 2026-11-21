@@ -22,9 +22,11 @@ def qualifies_for_parasol(text):
             fields.setdefault(name, match[2].strip().strip('*').strip())
     if fields.get('posm'):
         return True
-    if 'posm' not in fields:
-        return False
-    return all(fields.get(key) for key in ('water', 'c-cola', 'cb ed', 'exprez'))
+    water = fields.get('water')
+    ccola = fields.get('c-cola') or fields.get('c cola') or fields.get('ccola')
+    cbed = fields.get('cb ed') or fields.get('ed') or fields.get('cb-ed')
+    exprez = fields.get('exprez') or fields.get('express')
+    return bool(water and ccola and cbed and exprez)
 
 
 def collect_parasol_message(application, message, user_id, text, at):

@@ -222,7 +222,7 @@ def report_image(filename: str):
     raise HTTPException(404, "Image not found")
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def dashboard_page():
     return HTMLResponse(
         (REACT_HTML if REACT_HTML.exists() else HTML).read_text(encoding="utf-8"),
