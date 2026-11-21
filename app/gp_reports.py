@@ -223,6 +223,20 @@ async def upload_template(kind:str,file:UploadFile=File(...),_admin=Depends(curr
         backup=BASE/'template_backups'/(_now().replace(':','-')+'_'+target.name);backup.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(target,backup)
     temp=target.with_suffix('.tmp');temp.write_bytes(raw);temp.replace(target)
     return {'saved':True,'name':target.name}
+@router.get('/live-preview')
+def live_preview(day:date|None=None,_admin=Depends(current_admin)):
+    """Immediately render the Report GP & Report with Dealer template populated with live DB data."""
+    import tempfile
+    from app.gp_live_export import export_live_gp_reports
+    target_day=day or datetime.now(ZoneInfo('Asia/Phnom_Penh')).date()
+    template_path=BASE/'templates'/TEMPLATES['template']
+    if not template_path.exists():
+        raise HTTPException(404,'Report GP template (Simple-Report GP.xlsx) is missing.')
+    with tempfile.TemporaryDirectory(prefix='gp-preview-') as tmpdir:
+        paths=export_live_gp_reports(target_day.isoformat(),target_day.isoformat(),template_path,Path(tmpdir))
+        return workbook_preview(paths[0])
+
+
 @router.get('/runs')
 def runs(_admin=Depends(current_admin)):
     JOBS.mkdir(parents=True,exist_ok=True);items=[]

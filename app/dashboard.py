@@ -700,6 +700,39 @@ def dashboard_employee_routes(day: date = Query(...), telegram_id: int = Query(.
     return cached_response if cached_response is not None else payload
 
 
+@app.get("/api/v1/dashboard/road-route")
+def dashboard_road_route(coords: str = Query(..., max_length=4000)):
+    """Fetch road-following driving geometry from OSRM for a sequence of lon,lat pairs."""
+    import hashlib
+    import urllib.request
+    from app.config import ROUTING_ENABLED, ROUTING_TIMEOUT_SECONDS, ROUTING_URL, ROUTING_USER_AGENT
+    cleaned = ";".join(part.strip() for part in coords.split(";") if "," in part)
+    if not ROUTING_ENABLED or cleaned.count(";") < 1:
+        return {"geometry": []}
+    redis_client = getattr(app.state, "redis", None)
+    digest = hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:24]
+    cache_key = f"so-alert:dashboard:road-geom:v1:{digest}"
+    cached = _redis_json_response(redis_client, cache_key)
+    if cached is not None:
+        return cached
+    url = f"{ROUTING_URL}/route/v1/driving/{cleaned}?overview=full&geometries=geojson"
+    geometry: list[list[float]] = []
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": ROUTING_USER_AGENT})
+        with urllib.request.urlopen(req, timeout=min(8.0, float(ROUTING_TIMEOUT_SECONDS))) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        routes = data.get("routes") or []
+        if routes and isinstance(routes[0].get("geometry"), dict):
+            raw_coords = routes[0]["geometry"].get("coordinates") or []
+            geometry = [[round(float(lat), 6), round(float(lon), 6)] for lon, lat in raw_coords]
+    except Exception:
+        geometry = []
+    payload = {"geometry": geometry}
+    if geometry:
+        _redis_cache_json(redis_client, cache_key, payload, 3600)
+    return payload
+
+
 @app.get("/api/v1/dashboard/available-dates")
 def dashboard_available_dates():
     rows=available_dates()
