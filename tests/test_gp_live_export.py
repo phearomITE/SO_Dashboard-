@@ -58,8 +58,8 @@ def test_export_live_gp_reports_populates_checkins_without_scraping(tmp_path):
             assert gp["J10"].value == 2  # Check-ins (never blank!)
             assert gp["L10"].value == 1  # Emergency Outlet WS
             assert gp["Q10"].value == 1  # Attacking Stock Retail
-            assert gp["AB10"].value == 6 # Water WS
-            assert gp["AC10"].value == 4 # Water Retail
+            assert gp["AB10"].value == 1 # Water WS (1 purchasing outlet)
+            assert gp["AC10"].value == 1 # Water Retail (1 purchasing outlet)
 
             dlr = wb["Report with Dealer"]
             ca1_row = next(r for r in range(10, 75) if dlr.cell(r, 3).value == "CA1")

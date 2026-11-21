@@ -50,20 +50,21 @@ def _norm_outlet_type(value: str | None) -> str:
     return "Retail"
 
 
-def _metric_qty(value: object) -> float:
-    text_val = str(value or "").strip()
-    if not text_val or text_val in ("-", "—", "0", "0.0", "no", "none", "n/a", "false"):
-        return 0.0
-    if text_val.lower() in ("yes", "y", "true", "✓"):
-        return 1.0
-    m = re.search(r"[-+]?\d+(?:\.\d+)?", text_val)
+def _metric_qty(value: object) -> int:
+    """Binary outlet-count conversion (0 or 1) matching GP Execution Purchase outlet By SKU."""
+    text_val = str(value or "").strip().strip("*").strip()
+    if not text_val:
+        return 0
+    low = text_val.casefold()
+    if low in ("-", "—", "–", "no", "n", "o", "none", "nil", "null", "n/a", "na", "false"):
+        return 0
+    m = re.fullmatch(r"[-+]?\d+(?:\.\d+)?", text_val)
     if m:
         try:
-            num = float(m.group(0))
-            return num if num > 0 else 0.0
+            return 1 if float(text_val) > 0 else 0
         except ValueError:
-            return 1.0
-    return 1.0
+            return 0
+    return 1
 
 
 def _parse_form_fields(text_val: str) -> dict[str, str]:
@@ -235,12 +236,22 @@ def _setup_headers(sheet, row1_label: str, is_dealer: bool, day: date) -> None:
             sub.border = THIN_BORDER
 
 
-def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: Path, output_path: Path) -> None:
-    visits = _collect_day_visits(conn, target_day)
+def _collect_range_visits(conn: Session, start_day: date, end_day: date) -> list[dict]:
+    visits: list[dict] = []
+    cur = start_day
+    while cur <= end_day:
+        visits.extend(_collect_day_visits(conn, cur))
+        cur += timedelta(days=1)
+    return visits
+
+
+def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: Path, output_path: Path, end_day: date | None = None) -> None:
+    win_end = end_day or target_day
+    visits = _collect_day_visits(conn, target_day) if win_end == target_day else _collect_range_visits(conn, target_day, win_end)
 
     roster_rows = conn.scalars(select(Roster).where(Roster.active == 1)).all()
     day_start = datetime.combine(target_day, datetime.min.time())
-    day_end = day_start + timedelta(days=1)
+    day_end = datetime.combine(win_end + timedelta(days=1), datetime.min.time())
     leave_rows = conn.scalars(
         select(Leave).where(Leave.start < day_end, Leave.end > day_start)
     ).all()
@@ -437,3 +448,16 @@ def export_live_gp_reports(start_date: str, end_date: str, template_path: Path, 
             _write_gp_workbook_for_day(conn, day, template_path, out_path)
             paths.append(out_path)
     return paths
+
+
+def export_live_gp_summary(start_date: str, end_date: str, template_path: Path, output_path: Path) -> Path:
+    """Generate one combined live Report GP workbook for start_date..end_date (fast, no scraping)."""
+    start = date.fromisoformat(start_date)
+    end = date.fromisoformat(end_date)
+    if end < start:
+        end = start
+    if (end - start).days > 31:
+        start = end - timedelta(days=31)
+    with Session(db.engine) as conn:
+        _write_gp_workbook_for_day(conn, start, template_path, output_path, end_day=end)
+    return output_path

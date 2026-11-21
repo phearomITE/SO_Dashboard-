@@ -222,15 +222,42 @@ async def upload_template(kind:str,file:UploadFile=File(...),_admin=Depends(curr
     temp=target.with_suffix('.tmp');temp.write_bytes(raw);temp.replace(target)
     return {'saved':True,'name':target.name}
 @router.get('/live-preview')
-def live_preview(day:date|None=None,_admin=Depends(current_admin)):
+def live_preview(day:date|None=None,start:date|None=None,end:date|None=None,_admin=Depends(current_admin)):
     """Immediately render the Report GP & Report with Dealer template populated with live DB data."""
     import tempfile
-    from app.gp_live_export import export_live_gp_reports
-    target_day=day or datetime.now(ZoneInfo('Asia/Phnom_Penh')).date()
+    from app.gp_live_export import export_live_gp_summary
+    today=datetime.now(ZoneInfo('Asia/Phnom_Penh')).date()
+    win_start=start or day or today
+    win_end=end or win_start
+    if win_end<win_start:win_end=win_start
     template_path=BASE/'templates'/TEMPLATES['template']
     with tempfile.TemporaryDirectory(prefix='gp-preview-') as tmpdir:
-        paths=export_live_gp_reports(target_day.isoformat(),target_day.isoformat(),template_path,Path(tmpdir))
-        return workbook_preview(paths[0])
+        out=Path(tmpdir)/f'report_gp_{win_end.isoformat()}.xlsx'
+        export_live_gp_summary(win_start.isoformat(),win_end.isoformat(),template_path,out)
+        data=workbook_preview(out)
+        data['start']=win_start.isoformat()
+        data['end']=win_end.isoformat()
+        data['updated_at']=_now()
+        return data
+
+
+@router.get('/live-download')
+def live_download(day:date|None=None,start:date|None=None,end:date|None=None,_admin=Depends(current_admin)):
+    """Download the live Report GP Excel workbook immediately without waiting for a background run."""
+    import tempfile
+    from app.gp_live_export import export_live_gp_summary
+    today=datetime.now(ZoneInfo('Asia/Phnom_Penh')).date()
+    win_start=start or day or today
+    win_end=end or win_start
+    if win_end<win_start:win_end=win_start
+    template_path=BASE/'templates'/TEMPLATES['template']
+    fname=f'report_gp_{win_start.isoformat()}.xlsx' if win_start==win_end else f'report_gp_{win_start.isoformat()}_to_{win_end.isoformat()}.xlsx'
+    with tempfile.TemporaryDirectory(prefix='gp-dl-') as tmpdir:
+        out=Path(tmpdir)/fname
+        export_live_gp_summary(win_start.isoformat(),win_end.isoformat(),template_path,out)
+        content=out.read_bytes()
+    return Response(content=content,media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    headers={'Content-Disposition':f'attachment; filename="{fname}"'})
 
 
 @router.get('/runs')
