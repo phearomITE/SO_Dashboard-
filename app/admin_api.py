@@ -611,14 +611,15 @@ def _legacy_al_summary(request: Request, day: date, region: str | None = None, d
 
 @router.get("/admin/first-check-alerts")
 def first_check_alerts(request: Request, _admin: str = Depends(current_admin)):
-    """Dashboard alerts for SO/SS users whose first location check is late or missing."""
-    cache_key="so-dashboard:v3:first-check-alerts"
+    """Dashboard alerts for SO/SS users whose first location check-in arrived after 9:00 AM (09:01+)."""
+    cache_key="so-dashboard:v4:first-check-alerts"
     cached=_cache_get(request,cache_key)
     if cached is not None:return cached
     now = db.now()
     day_start = datetime.combine(now.date(), datetime.min.time())
     deadline = day_start + timedelta(hours=9)
-    if now < deadline:
+    late_cutoff = day_start + timedelta(hours=9, minutes=1)
+    if now < late_cutoff:
         return {"date": now.date().isoformat(), "deadline": "09:00 AM", "deadline_passed": False,
                 "count": 0, "items": []}
 
@@ -647,21 +648,21 @@ def first_check_alerts(request: Request, _admin: str = Depends(current_admin)):
                    coalesce(nullif(f.telegram_group,''),
                             nullif(concat_ws('-',nullif(r.region,''),nullif(r.dealer,'')),''),'—') AS telegram_group,
                    f.first_check_at,
-                   CASE WHEN f.first_check_at IS NULL THEN 'missing' ELSE 'late' END AS alert_type
-            FROM active_roster r LEFT JOIN first_pins f ON f.uid=r.telegram_id
-            WHERE (f.first_check_at IS NULL OR f.first_check_at>:deadline)
+                   'late' AS alert_type
+            FROM active_roster r JOIN first_pins f ON f.uid=r.telegram_id
+            WHERE f.first_check_at >= :late_cutoff
               AND NOT EXISTS (
                 SELECT 1 FROM so_leave_v1 l
                 WHERE l.employee=r.employee_id AND l.uid=r.telegram_id
                   AND l.start<=:deadline AND l."end">:deadline
               )
-            ORDER BY r.region,r.dealer,r.real_name,r.employee_id
-        """), {"day_start": day_start, "day_end": day_end, "deadline": deadline, "now": now}).mappings().all()]
+            ORDER BY f.first_check_at DESC, r.region, r.dealer, r.real_name, r.employee_id
+        """), {"day_start": day_start, "day_end": day_end, "deadline": deadline, "late_cutoff": late_cutoff, "now": now}).mappings().all()]
     items = []
     for row in rows:
         first_check = row.pop("first_check_at", None)
         row["first_check_time"] = first_check.strftime("%I:%M %p") if first_check else ""
-        row["minutes_late"] = max(0, int((first_check - deadline).total_seconds() // 60)) if first_check else None
+        row["minutes_late"] = max(1, int((first_check - deadline).total_seconds() // 60)) if first_check else None
         items.append(row)
     payload={"date": now.date().isoformat(), "deadline": "09:00 AM", "deadline_passed": True,
             "count": len(items), "items": items}

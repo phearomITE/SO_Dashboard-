@@ -1,0 +1,70 @@
+from datetime import date, datetime
+from pathlib import Path
+from openpyxl import load_workbook
+import pytest
+
+from app import db
+from app.db import Base, Leave, Roster, SilverVisit
+from app.gp_live_export import export_live_gp_reports
+from app.gp_reports import _validate
+
+
+def test_export_live_gp_reports_populates_checkins_without_scraping(tmp_path):
+    db.connect("sqlite:///:memory:")
+    try:
+        day = date(2026, 11, 21)
+        with db.session() as session:
+            session.add(Roster(id=1, employee="9001", uid=1001, name="SO One", region="R1", dealer="CA1", position="SO", active=1, source="excel"))
+            session.add(Roster(id=2, employee="9002", uid=1002, name="SS One", region="R1", dealer="CA1", position="SS", active=1, source="excel"))
+            session.add(SilverVisit(
+                visit_id=1, source_event_id=101, chat_id=-1001,
+                employee_id="9001", telegram_id=1001, report_date=day,
+                submitted_at=datetime(2026, 11, 21, 9, 15),
+                latitude=11.55, longitude=104.91,
+                region="R1", dealer="CA1", position="SO", group_name="R1-SO-CA1",
+                actual_province="Phnom Penh", actual_district="Daun Penh", actual_commune="Phsar Thmei 1",
+                outlet_type="WS", water="6", c_cola="1", emergency_outlet="Yes",
+            ))
+            session.add(SilverVisit(
+                visit_id=2, source_event_id=102, chat_id=-1001,
+                employee_id="9001", telegram_id=1001, report_date=day,
+                submitted_at=datetime(2026, 11, 21, 9, 45),
+                latitude=11.56, longitude=104.92,
+                region="R1", dealer="CA1", position="SO", group_name="R1-SO-CA1",
+                actual_province="Phnom Penh", actual_district="Chamkar Mon", actual_commune="Tonle Bassac",
+                outlet_type="RT", water="4", c_cola="2", attacking_stock="1",
+            ))
+            session.commit()
+
+        template = Path("data/gp_reporting/templates/Simple-Report GP.xlsx")
+        paths = export_live_gp_reports(day.isoformat(), day.isoformat(), template, tmp_path)
+        assert len(paths) == 1
+        out = paths[0]
+        assert out.exists()
+
+        meta = _validate(out)
+        assert meta["dealers"] == 65
+        assert meta["districts"] == 2
+        assert meta["communes"] == 2
+
+        wb = load_workbook(out, data_only=False)
+        try:
+            gp = wb["Report GP"]
+            assert gp["B10"].value == "R1"
+            assert gp["D10"].value == 1  # SO
+            assert gp["E10"].value == 1  # SS
+            assert gp["H10"].value == 2  # Districts
+            assert gp["I10"].value == 2  # Communes
+            assert gp["J10"].value == 2  # Check-ins (never blank!)
+            assert gp["L10"].value == 1  # Emergency Outlet WS
+            assert gp["Q10"].value == 1  # Attacking Stock Retail
+            assert gp["AB10"].value == 6 # Water WS
+            assert gp["AC10"].value == 4 # Water Retail
+
+            dlr = wb["Report with Dealer"]
+            ca1_row = next(r for r in range(10, 75) if dlr.cell(r, 3).value == "CA1")
+            assert dlr.cell(ca1_row, 10).value == 2
+        finally:
+            wb.close()
+    finally:
+        db.engine.dispose()

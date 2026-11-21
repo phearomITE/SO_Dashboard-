@@ -166,15 +166,15 @@ function Header({ page, apiHealth, onOpenAlert }) {
             {firstCheckAlerts?.count > 0 && <span className="notification-count">{firstCheckAlerts.count > 99 ? "99+" : firstCheckAlerts.count}</span>}
           </button>
           {notificationOpen && <section className="notification-popover" role="dialog" aria-label="First check-in alerts">
-            <div className="notification-heading"><div><b>First check-in</b><small>Due by 9:00 AM ICT · {firstCheckAlerts?.date || "Today"}</small></div>
+            <div className="notification-heading"><div><b>Late check-ins (after 9:00 AM)</b><small>First check-in 9:01 AM+ · {firstCheckAlerts?.date || "Today"}</small></div>
               <span className={firstCheckAlerts?.count ? "notification-total is-alert" : "notification-total"}>{firstCheckAlerts?.count || 0}</span></div>
             {firstCheckAlerts?.error ? <p className="notification-empty">Alerts could not be loaded. Try again shortly.</p> :
-              firstCheckAlerts?.deadline_passed === false ? <p className="notification-empty">Monitoring starts at 9:00 AM ICT.</p> :
+              firstCheckAlerts?.deadline_passed === false ? <p className="notification-empty">Late check-in monitoring starts after 9:00 AM ICT.</p> :
               firstCheckAlerts?.items?.length ? <div className="notification-list">{firstCheckAlerts.items.map(item => <button type="button" className="notification-item notification-action" key={`${item.employee_id}-${item.telegram_id || ""}`} onClick={() => { onOpenAlert(item); setNotificationOpen(false); }} aria-label={`Show ${item.real_name || item.employee_id} on live map`}>
-                <div className="notification-item-top"><b>{item.real_name || "Sales user"}</b><span className={item.alert_type === "late" ? "notification-kind is-late" : "notification-kind"}>{item.alert_type === "late" ? "Late" : "No check-in"}</span></div>
+                <div className="notification-item-top"><b>{item.real_name || "Sales user"}</b><span className="notification-kind is-late">Late ({item.first_check_time})</span></div>
                 <small>{item.employee_id} · {item.region} / {item.dealer} · {item.telegram_group}</small>
-                <p>{item.alert_type === "late" ? `First check-in at ${item.first_check_time}` : "No first check-in by 9:00 AM"}<span className="notification-open-map">View on map ↗</span></p>
-              </button>)}</div> : <p className="notification-empty">All active sales have checked in by 9:00 AM.</p>}
+                <p>First check-in at {item.first_check_time}{item.minutes_late ? ` (${item.minutes_late} min late)` : ""}<span className="notification-open-map">View on map ↗</span></p>
+              </button>)}</div> : <p className="notification-empty">No late check-ins after 9:00 AM.</p>}
           </section>}
         </div>
         <span className={`sa-conn-pill ${apiHealth !== "ready" ? "is-warn" : ""}`}>
@@ -1279,8 +1279,6 @@ function SettingsPage() {
     change("working_days", next);
   }
   return (
-    <>
-    <TelegramConnections api={adminApi}/>
     <div className="panel" style={{ padding: "4px 24px 24px" }}>
       <div className="panel-head" style={{ paddingLeft: 0, paddingRight: 0 }}>
         <div>
@@ -1354,7 +1352,6 @@ function SettingsPage() {
       <div className="settings-row"><div><b>Public ngrok dashboard link</b></div><div style={{display:"flex",gap:10,alignItems:"center"}}>{tunnel.active&&<a className="secondary compact" href={tunnel.public_url} target="_blank" rel="noreferrer">Open public dashboard</a>}<button className="secondary compact" onClick={refreshTunnel}>Refresh link</button></div></div>
       </>}
     </div>
-    </>
   );
 }
 

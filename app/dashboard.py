@@ -496,28 +496,48 @@ def historical_routes(selected, telegram_id):
 
 
 @app.get("/api/v1/dashboard/snapshot")
-def snapshot(day: date | None = Query(default=None)):
+def snapshot(day: date | None = Query(default=None),
+             start: date | None = Query(default=None),
+             end: date | None = Query(default=None)):
     # Use Cambodia local time and Redis before any database reads. Live snapshots
     # have a short TTL; historical snapshots are stable and can be reused longer.
     current = datetime.now(ZoneInfo("Asia/Phnom_Penh")).date()
-    selected = day or current
+    win_start = start or day or current
+    win_end = end or win_start
+    if win_end < win_start:
+        win_end = win_start
+    if (win_end - win_start).days > 31:
+        win_start = win_end - timedelta(days=31)
+    selected = win_end
+    is_range = win_end > win_start
     redis_client = getattr(app.state, "redis", None)
-    cache_key = f"so-alert:dashboard:snapshot:v4:{selected.isoformat()}"
+    cache_key = f"so-alert:dashboard:snapshot:v5:{win_start.isoformat()}:{win_end.isoformat()}"
     cached = _redis_json_response(redis_client, cache_key)
     if cached is not None:
         return cached
-    if selected == current:
-        checkins=historical_checkins(selected)
-        data_source="raw_live_events"
-        if not checkins:
+    if not is_range:
+        if selected == current:
+            checkins=historical_checkins(selected)
+            data_source="raw_live_events"
+            if not checkins:
+                checkins=warehouse_checkins(selected)
+                data_source="silver_warehouse"
+        else:
             checkins=warehouse_checkins(selected)
             data_source="silver_warehouse"
+            if not checkins:
+                checkins=historical_checkins(selected)
+                data_source="raw_event_fallback"
     else:
-        checkins=warehouse_checkins(selected)
-        data_source="silver_warehouse"
-        if not checkins:
-            checkins=historical_checkins(selected)
-            data_source="raw_event_fallback"
+        checkins = []
+        d_cur = win_start
+        while d_cur <= win_end:
+            day_rows = historical_checkins(d_cur) if d_cur == current else warehouse_checkins(d_cur)
+            if not day_rows:
+                day_rows = warehouse_checkins(d_cur) if d_cur == current else historical_checkins(d_cur)
+            checkins.extend(day_rows)
+            d_cur += timedelta(days=1)
+        data_source = "range_combined"
     routes=[]  # Loaded on demand for one selected employee.
     totals = _query_rows("""
         SELECT count(DISTINCT telegram_id) FILTER (WHERE active=1) AS employees_total
@@ -525,27 +545,27 @@ def snapshot(day: date | None = Query(default=None)):
     """)[0]
     ops = _query_rows("""SELECT
         (SELECT count(DISTINCT employee_id) FROM silver_so_visit_v1
-         WHERE report_date=:selected AND upper(trim(coalesce(position,'SO'))) IN ('SO','SS')) AS active_sale,
+         WHERE report_date BETWEEN :win_start AND :win_end AND upper(trim(coalesce(position,'SO'))) IN ('SO','SS')) AS active_sale,
         (SELECT count(*) FROM silver_so_visit_v1
-         WHERE report_date=:selected AND upper(trim(coalesce(position,'SO'))) IN ('SO','SS')) AS checkin_count,
+         WHERE report_date BETWEEN :win_start AND :win_end AND upper(trim(coalesce(position,'SO'))) IN ('SO','SS')) AS checkin_count,
         (SELECT count(DISTINCT uid) FROM so_missing_v1
-         WHERE start::date=:selected AND alert_mid IS NOT NULL) AS missing_count,
+         WHERE start::date BETWEEN :win_start AND :win_end AND alert_mid IS NOT NULL) AS missing_count,
         (SELECT count(*) FROM silver_so_visit_v1
-         WHERE report_date=:selected AND coalesce(road_distance_km,0)>10
+         WHERE report_date BETWEEN :win_start AND :win_end AND coalesce(road_distance_km,0)>10
            AND upper(trim(coalesce(position,'SO'))) IN ('SO','SS')) AS over_10km_count,
         (SELECT count(DISTINCT r.employee) FROM so_roster_v1 r
          WHERE r.active=1
            AND EXISTS(SELECT 1 FROM so_leave_v1 l
              WHERE l.employee=r.employee AND l.uid=r.uid
-               AND l.start<(:selected + interval '1 day') AND l."end">:selected)) AS al_count
-    """, {"selected": selected})[0]
+               AND l.start<(:win_end + interval '1 day') AND l."end">:win_start)) AS al_count
+    """, {"win_start": win_start, "win_end": win_end})[0]
     leaves = _query_rows("""SELECT r.employee AS employee_id,r.uid AS telegram_id,r.name AS real_name,
                r.region,r.dealer,r.position,l.source,l.start AS leave_start,l."end" AS leave_end
         FROM so_roster_v1 r JOIN so_leave_v1 l ON l.employee=r.employee AND l.uid=r.uid
         WHERE r.active=1
-          AND l.start<(:selected + interval '1 day') AND l."end">:selected
+          AND l.start<(:win_end + interval '1 day') AND l."end">:win_start
         ORDER BY r.region,r.dealer,r.name,r.employee,l.recorded_at DESC,l.id DESC
-    """, {"selected": selected})
+    """, {"win_start": win_start, "win_end": win_end})
     missing_rows = _query_rows("""SELECT DISTINCT ON (m.uid)
                m.uid AS telegram_id,
                coalesce(r.employee,nullif(m.person->>'employee',''),'') AS employee_id,
@@ -567,7 +587,7 @@ def snapshot(day: date | None = Query(default=None)):
           AND m.chat<>-1004303041907 AND lower(trim(coalesce(g.title,'')))<>'test_so'
           AND upper(trim(coalesce(nullif(m.person->>'position',''),r.position,'SO'))) IN ('SO','SS')
         ORDER BY m.uid,m.start DESC,m.id DESC
-    """, {"start":datetime.combine(selected,datetime.min.time()),"end":datetime.combine(selected+timedelta(days=1),datetime.min.time())})
+    """, {"start":datetime.combine(win_start,datetime.min.time()),"end":datetime.combine(win_end+timedelta(days=1),datetime.min.time())})
     for row in missing_rows:
         for key in ("missing_start","missing_end","reason_at"):
             if row.get(key) is not None:row[key]=row[key].isoformat()
@@ -640,7 +660,8 @@ def snapshot(day: date | None = Query(default=None)):
             if row.get(key) is not None:
                 row[key] = row[key].isoformat()
     if warehouse.get("completed_at") is not None:warehouse["completed_at"]=warehouse["completed_at"].isoformat()
-    payload = {"date": selected.isoformat(), "current_business_date": current.isoformat(), "is_live": selected==current,
+    payload = {"date": selected.isoformat(), "start_date": win_start.isoformat(), "end_date": win_end.isoformat(),
+            "current_business_date": current.isoformat(), "is_live": win_end >= current,
             "data_source":data_source,
             "checkins": checkins, "routes": routes, "leaves": leaves, "missing_rows": missing_rows, "plan_communes": plan_communes, "plan_targets": plan_targets, "dealers": load_dealers(),
             "collection": collection, "roster": roster_rows, "latest_data_date": latest_day.isoformat() if latest_day else None,
@@ -653,7 +674,7 @@ def snapshot(day: date | None = Query(default=None)):
             "al_count": int(ops.get("al_count") or 0),
             "coverage_master": coverage_master,
             "last_refresh": last_refresh.isoformat() if last_refresh else None,"warehouse":warehouse,
-            "refresh_seconds": max(60, int(os.getenv("DASHBOARD_REFRESH_SECONDS", "300")))}
+            "refresh_seconds": 10 if win_end >= current else max(10, int(os.getenv("DASHBOARD_REFRESH_SECONDS", "60")))}
     ttl_env = "DASHBOARD_LIVE_SNAPSHOT_TTL_SECONDS" if selected==current else "DASHBOARD_HISTORY_SNAPSHOT_TTL_SECONDS"
     default_ttl = "5" if selected==current else "60"
     cached_response = _redis_cache_json(redis_client, cache_key, payload, os.getenv(ttl_env, default_ttl))

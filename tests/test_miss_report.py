@@ -145,7 +145,7 @@ def test_miss_report_edit_and_delete_reason():
 def test_sa_ux_contracts_across_frontend_and_map():
     dashboard_html = (ROOT / "app" / "static" / "dashboard.html").read_text(encoding="utf-8")
     assert "tile.openstreetmap.org" in dashboard_html
-    assert "street.addTo(map)" in dashboard_html
+    assert "satellite.addTo(map)" in dashboard_html
     assert "dealerLayer=L.layerGroup().addTo(map)" in dashboard_html
     assert "dealerLayer.clearLayers()" in dashboard_html
     assert "sa-num-pin" in dashboard_html

@@ -560,3 +560,230 @@ html.embedded .profile-link {
     max-width: 100%;
   }
 }
+
+/* Live 10s Pill, From/To Date Filters & Dashboard SA Employees List */
+html.embedded .sa-filters-live {
+  grid-template-columns: repeat(8, minmax(0, 1fr)) auto !important;
+  align-items: end;
+}
+
+.sa-live-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.sa-live-10s-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: #eaf4ef;
+  color: #156454;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sa-live-10s-pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #16796c;
+  display: inline-block;
+}
+
+.sa-live-10s-pill.is-history {
+  background: #f1f4f3;
+  color: #5d706c;
+}
+
+.sa-live-10s-pill.is-history i {
+  background: #7f918d;
+}
+
+.sa-refresh-icon-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d8e2dc;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #192d2b;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.sa-refresh-icon-btn:hover {
+  background: #f2f7f4;
+}
+
+.sa-employees-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.sa-emp-list-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e7eeeb;
+}
+
+.sa-emp-list-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #172e28;
+}
+
+.sa-emp-list-sub {
+  font-size: 12px;
+  color: #677975;
+  margin-top: 2px;
+}
+
+.sa-emp-count-badge {
+  background: #e7f3ed;
+  color: #156454;
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 4px 11px;
+}
+
+.sa-emp-list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  flex: 1;
+  margin-top: 4px;
+}
+
+.sa-emp-item {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 11px 6px;
+  border: 0;
+  border-bottom: 1px solid #eef3f0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.sa-emp-item:hover {
+  background: #f5f9f7;
+}
+
+.sa-emp-avatar {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #e6f2ec;
+  color: #156454;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sa-emp-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sa-emp-copy {
+  min-width: 0;
+}
+
+.sa-emp-copy b {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: #192d2b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sa-emp-copy small {
+  display: block;
+  font-size: 11.5px;
+  color: #677975;
+  margin-top: 1px;
+}
+
+.sa-emp-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  color: #677975;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sa-emp-right b {
+  font-size: 15px;
+  line-height: 1;
+  color: #8fa19d;
+}
+
+.sa-route-back-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sa-route-back-btn {
+  border: 1px solid #d8e2dc;
+  background: #ffffff;
+  color: #156454;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sa-route-back-btn:hover {
+  background: #f2f7f4;
+}
+
+@media (max-width: 1450px) {
+  html.embedded .sa-filters-live {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  html.embedded .sa-filters-live {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .sa-live-controls {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+  }
+}

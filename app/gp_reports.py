@@ -144,44 +144,24 @@ def _sqlite_copy(source,target):
     temporary.replace(target)
 
 async def _run(job):
-    # SQLite per-message writes stay on Linux local storage; persist once per run.
-    import tempfile,shutil
     import time
+    from app.gp_live_export import export_live_gp_reports
     started=time.perf_counter()
     settings=_settings();settings.ensure_directories()
-    if reuse_artifacts(BASE,job,settings):
-        job.update(status='completed',stage='Reports ready from validated cache',progress=100,elapsed_seconds=round(time.perf_counter()-started,3),completed_at=_now(),updated_at=_now());_save(job);return
-    with tempfile.TemporaryDirectory(prefix='gp-report-') as folder:
-        work=Path(folder);(work/'data').mkdir();(work/'templates').mkdir()
-        if settings.database_path.exists():_sqlite_copy(settings.database_path,work/'data/banner_tracking.db')
-        import hashlib
-        def digest(path):
-            if not path.exists():return None
-            h=hashlib.sha256()
-            with path.open('rb') as stream:
-                for block in iter(lambda:stream.read(1024*1024),b''):h.update(block)
-            return h.digest()
-        before_database=digest(work/'data/banner_tracking.db')
-        session=settings.session_path.with_suffix('.session')
-        if job['source']!='saved' and session.exists():_sqlite_copy(session,work/'data/banner_tracker.session')
-        for name in TEMPLATES.values():shutil.copy2(BASE/'templates'/name,work/'templates'/name)
-        if (BASE/'reference').exists():os.symlink(BASE/'reference',work/'reference',target_is_directory=True)
-        local=replace(settings,database_path=work/'data/banner_tracking.db',session_path=work/'data/banner_tracker',
-            report_gp_template_path=work/'templates/Simple-Report GP.xlsx',staff_master_path=work/'templates/R1-R8-Master List.xlsx')
-        try:await _run_local(job,local)
-        finally:
-            if local.database_path.exists() and digest(local.database_path)!=before_database:_sqlite_copy(local.database_path,settings.database_path)
-            if local.session_path.with_suffix('.session').exists():_sqlite_copy(local.session_path.with_suffix('.session'),session)
-            shutil.copy2(local.gp_so_master_path,settings.gp_so_master_path)
-            for name in ['gp_export_audits','so_list_backups']:
-                source=work/'data'/name
-                if source.exists():shutil.copytree(source,BASE/'data'/name,dirs_exist_ok=True)
-        if _cancel_events[job['id']].is_set():raise asyncio.CancelledError()
-        try:store_artifacts(BASE,job,settings)
-        except OSError:
-            import logging
-            logging.getLogger(__name__).warning('GP artifact cache write unavailable; reports remain downloadable',exc_info=True)
-        job.update(elapsed_seconds=round(time.perf_counter()-started,3),cache_hit=False,status='completed',stage='Reports ready',progress=100,completed_at=_now(),updated_at=_now());_save(job)
+    template_path=BASE/'templates'/TEMPLATES['template']
+    if not template_path.exists():
+        raise FileNotFoundError('Report GP template (Simple-Report GP.xlsx) is missing. Upload a template first.')
+    _step(job,'Reading live SO check-ins and reports from database',progress=25)
+    output=JOBS/job['id']/'outputs';output.mkdir(parents=True,exist_ok=True)
+    paths=export_live_gp_reports(job['start'],job['end'],template_path,output)
+    _step(job,'Validating workbook formulas and dealer/region totals',progress=85)
+    files=[]
+    for path in paths:
+        path=Path(path);keep_summary_sheets(path);files.append({'name':path.name,'bytes':path.stat().st_size,'validation':_validate(path)})
+    with zipfile.ZipFile(JOBS/job['id']/'reports.zip','w',zipfile.ZIP_DEFLATED) as bundle:
+        for item in files:bundle.write(output/item['name'],item['name'])
+    if _cancel_events[job['id']].is_set():raise asyncio.CancelledError()
+    job.update(elapsed_seconds=round(time.perf_counter()-started,3),cache_hit=False,files=files,status='completed',stage='Reports ready',progress=100,completed_at=_now(),updated_at=_now());_save(job)
 
 def _worker(job):
     async def entry():
