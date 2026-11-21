@@ -274,8 +274,8 @@ def new_engine(url=None):
     options={'connect_timeout':max(3,int(os.getenv('DB_CONNECT_TIMEOUT','10')))} if target.get_backend_name()=='postgresql' else {}
     pool_options={}
     if target.get_backend_name()=='postgresql':
-        pool_size=int(os.getenv('DB_POOL_SIZE','3' if external else '20'))
-        max_overflow=int(os.getenv('DB_MAX_OVERFLOW','3' if external else '40'))
+        pool_size=int(os.getenv('DB_POOL_SIZE','8' if external else '20'))
+        max_overflow=int(os.getenv('DB_MAX_OVERFLOW','12' if external else '40'))
         pool_options={'pool_size':pool_size,'max_overflow':max_overflow,'pool_timeout':30,'pool_recycle':1800}
     return create_engine(target,pool_pre_ping=True,connect_args=options,**pool_options)
 

@@ -39,7 +39,7 @@ ROUTING_ENABLED = os.getenv('ROUTING_ENABLED','true').lower() == 'true'
 ROUTING_URL = os.getenv('ROUTING_URL','https://router.project-osrm.org').rstrip('/')
 ROUTING_USER_AGENT = os.getenv('ROUTING_USER_AGENT','SO-Alert-Bot/1.0 (local business reporting bot)')
 ROUTING_ALERT_KM = float(os.getenv('ROUTING_ALERT_KM','10'))
-ROUTING_TIMEOUT_SECONDS = float(os.getenv('ROUTING_TIMEOUT_SECONDS','20'))
+ROUTING_TIMEOUT_SECONDS = float(os.getenv('ROUTING_TIMEOUT_SECONDS','6'))
 WAREHOUSE_ENABLED = os.getenv('WAREHOUSE_ENABLED','true').lower() == 'true'
 WAREHOUSE_INTERVAL_MINUTES = max(1,int(os.getenv('WAREHOUSE_INTERVAL_MINUTES','5')))
 WAREHOUSE_INITIAL_DELAY_SECONDS = max(10,int(os.getenv('WAREHOUSE_INITIAL_DELAY_SECONDS','30')))

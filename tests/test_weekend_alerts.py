@@ -94,3 +94,24 @@ def test_working_days_can_be_configured_for_saturday_and_sunday(monkeypatch):
             assert bot_control.automation_enabled(session) is True
     finally:
         db.engine.dispose()
+
+
+def test_khmer_calendar_holiday_pauses_alerts_while_keeping_forwarding_active(monkeypatch):
+    db.connect("sqlite:///:memory:")
+    try:
+        # Khmer New Year Day 1 (Tuesday, April 14, 2026) — a weekday that is a Khmer Calendar public holiday
+        kny = datetime(2026, 4, 14, 9, 0)
+        monkeypatch.setattr(bot_control, "now", lambda: kny)
+        with db.session() as session:
+            ctrl = bot_control.get_bot_control(session)
+            assert ctrl["working_day_active"] is True
+            assert ctrl["holiday_muted"] is True
+            assert "Khmer New Year" in ctrl["holiday_name"]
+            assert ctrl["enabled"] is False
+            assert bot_control.automation_enabled(session) is False
+
+            # Admin can optionally toggle off holiday pause if needed
+            bot_control.set_khmer_holidays_pause(session, False, changed_by=1, changed_at=kny)
+            assert bot_control.automation_enabled(session) is True
+    finally:
+        db.engine.dispose()

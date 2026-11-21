@@ -1264,6 +1264,9 @@ function SettingsPage() {
         ...x.questions,
         automation_enabled:x.automation.configured_enabled ?? x.automation.enabled,
         weekend_muted:Boolean(x.automation.weekend_muted),
+        holiday_muted:Boolean(x.automation.holiday_muted),
+        holiday_name:x.automation.holiday_name || "",
+        khmer_holidays_pause:x.khmer_holidays_pause ?? x.automation.khmer_holidays_pause ?? true,
         working_days:x.working_days || x.automation.working_days || DEFAULT_DAYS,
         alert_interval_minutes:x.alert_interval_minutes,
       })})
@@ -1272,7 +1275,7 @@ function SettingsPage() {
     refreshTunnel();
     return ()=>{active=false};
   },[]);
-  async function change(key,value){if(!s||saving)return;setError("");const before=s[key];setS(x=>({...x,[key]:value}));setSaving(true);try{const result=await adminApi("/api/v1/admin/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({[key]:value})});setS(prev=>({...result.questions,automation_enabled:result.automation.configured_enabled ?? result.automation.enabled,weekend_muted:Boolean(result.automation.weekend_muted ?? prev?.weekend_muted),working_days:result.working_days || result.automation.working_days || prev?.working_days || DEFAULT_DAYS,alert_interval_minutes:result.alert_interval_minutes}))}catch(e){setS(x=>({...x,[key]:before}));setError(e.message)}finally{setSaving(false)}}
+  async function change(key,value){if(!s||saving)return;setError("");const before=s[key];setS(x=>({...x,[key]:value}));setSaving(true);try{const result=await adminApi("/api/v1/admin/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({[key]:value})});setS(prev=>({...result.questions,automation_enabled:result.automation.configured_enabled ?? result.automation.enabled,weekend_muted:Boolean(result.automation.weekend_muted ?? prev?.weekend_muted),holiday_muted:Boolean(result.automation.holiday_muted ?? prev?.holiday_muted),holiday_name:result.automation.holiday_name ?? prev?.holiday_name ?? "",khmer_holidays_pause:result.khmer_holidays_pause ?? result.automation.khmer_holidays_pause ?? prev?.khmer_holidays_pause ?? true,working_days:result.working_days || result.automation.working_days || prev?.working_days || DEFAULT_DAYS,alert_interval_minutes:result.alert_interval_minutes}))}catch(e){setS(x=>({...x,[key]:before}));setError(e.message)}finally{setSaving(false)}}
   function toggleWorkingDay(dayKey){
     if(!s||saving)return;
     const next = { ...(s.working_days || DEFAULT_DAYS), [dayKey]: !(s.working_days?.[dayKey]) };
@@ -1310,6 +1313,13 @@ function SettingsPage() {
             );
           })}
         </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <b>Cambodia Public Holidays (Khmer Lunar Calendar)</b>
+          <small>Automatically pause alerts &amp; follow-up questions on official Khmer Calendar holidays (Khmer New Year, Pchum Ben, Water Festival, Royal Ploughing, Visak Bochea, etc. — khmer-lunar-calendar.com) while keeping 24h/7 check-in tracking &amp; report forwarding active.{s.holiday_name ? ` Today: ${s.holiday_name}` : ""}</small>
+        </div>
+        <button type="button" disabled={saving} role="switch" aria-label="Cambodia Public Holidays (Khmer Lunar Calendar)" aria-checked={Boolean(s.khmer_holidays_pause ?? true)} className={`switch ${(s.khmer_holidays_pause ?? true) ? "on" : ""}`} onClick={() => change("khmer_holidays_pause", !(s.khmer_holidays_pause ?? true))} />
       </div>
       <div className="settings-row"><div><b>Alert check interval</b><small>Applies on active Working Time days (Cambodia time)</small></div><select disabled={saving} value={s.alert_interval_minutes} onChange={e=>change("alert_interval_minutes",Number(e.target.value))}>{[5,10,15,20,25,30,35,40,45,50,55,60].map(v=><option key={v} value={v}>{v} minutes</option>)}</select></div>
       {[

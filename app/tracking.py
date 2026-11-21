@@ -166,6 +166,9 @@ async def analyze_pin_event(application,event_id):
         who=f'{name} | @{username}' if username else f'{name} | ID {event.uid}'
         map_url=f'https://maps.google.com/maps?q={lat},{lon}'
         message_url=telegram_link(event_chat,event_mid)
+        # Never spam retroactive alerts for historical pins older than 45 minutes during startup backfill.
+        if abs((db.now()-event_at).total_seconds())>2700 and event_at.date()<db.now().date():
+            return
         if status=='Incorrect':
             center=boundary_center(planned[0].get('commune_code',''),planned[0].get('commune','')) if planned else None
             plan_map=f'https://maps.google.com/maps?q={center[0]:.6f},{center[1]:.6f}' if center else 'Unavailable'

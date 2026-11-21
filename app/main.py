@@ -33,39 +33,40 @@ def main():
     try:db.acquire_lock()
     except RuntimeError as exc:raise SystemExit(str(exc)) from None
     try:
-        with db.session() as s:
-            if not TEST_MODE and PURGE_TEST_DATA_ON_STARTUP:
-                removed=db.purge_test_data(s)
-                logging.info('Production test-data cleanup: %s',removed)
-            # Always remove rows written by older releases. This must not
-            # depend on the bundled workbook hash changing.
-            purge_excluded_roster(s)
-            removed_users=purge_removed_users(s)
-            if any(value for key,value in removed_users.items() if key!='source_event_ids'):
-                logging.info('Permanent user cleanup: %s',removed_users)
-            roster_path=DATA/'List_SO.xlsx';roster_hash=hashlib.sha256(roster_path.read_bytes()).hexdigest()
-            logging.info('Startup configuration: checking roster, plan and location masters')
-            if db.state(s,'bundled_roster',{}).get('sha256')!=roster_hash:
-                count,so,controllers,controller_groups=import_roster(s,roster_path)
-                db.put(s,'bundled_roster',{'sha256':roster_hash,'rows':count,'so':so,'controllers':controllers,'controller_groups':controller_groups})
-            repaired=apply_reconciliation(s,DATA/'morning_talk_al_reconciliation_2026-11-11.csv')
-            if repaired:logging.info('Historical AL reconciliation: %s verified matched employees',repaired)
-            plan_path=DATA/'Plan_SO.xlsx';plan_hash=hashlib.sha256(plan_path.read_bytes()).hexdigest()
-            if db.state(s,'bundled_plan',{}).get('sha256')!=plan_hash:
-                rows=import_plan(s,plan_path,0,plan_path.name);db.put(s,'bundled_plan',{'sha256':plan_hash,'rows':rows})
-            location_path=DATA/'Location_All.xlsx';location_hash=hashlib.sha256(location_path.read_bytes()).hexdigest()
-            if db.state(s,'bundled_location',{}).get('sha256')!=location_hash:
-                rows,_=import_locations(s,location_path,location_path.name);db.put(s,'bundled_location',{'sha256':location_hash,'rows':rows})
-            dealer_csv=DATA/'DEALERS_STATION_All_Location.csv'
-            dealer_path=dealer_csv if dealer_csv.exists() else DATA/'Dealer Location With sales coverage.xlsx'
-            dealer_hash=hashlib.sha256(dealer_path.read_bytes()).hexdigest()
-            if db.state(s,'bundled_dealer_locations',{}).get('sha256')!=dealer_hash:
-                source_rows,dealers=import_dealer_locations(s,dealer_path)
-                db.put(s,'bundled_dealer_locations',{'sha256':dealer_hash,'source_rows':source_rows,'dealers':dealers})
-            # Never block Telegram polling on the large Bronze-Silver-Gold
-            # refresh. post_init schedules it in a worker thread after the bot
-            # is already able to answer commands.
-            logging.info('Startup configuration committed; warehouse refresh is deferred')
+        try:
+            with db.session() as s:
+                if not TEST_MODE and PURGE_TEST_DATA_ON_STARTUP:
+                    removed=db.purge_test_data(s)
+                    logging.info('Production test-data cleanup: %s',removed)
+                # Always remove rows written by older releases. This must not
+                # depend on the bundled workbook hash changing.
+                purge_excluded_roster(s)
+                removed_users=purge_removed_users(s)
+                if any(value for key,value in removed_users.items() if key!='source_event_ids'):
+                    logging.info('Permanent user cleanup: %s',removed_users)
+                roster_path=DATA/'List_SO.xlsx';roster_hash=hashlib.sha256(roster_path.read_bytes()).hexdigest()
+                logging.info('Startup configuration: checking roster, plan and location masters')
+                if db.state(s,'bundled_roster',{}).get('sha256')!=roster_hash:
+                    count,so,controllers,controller_groups=import_roster(s,roster_path)
+                    db.put(s,'bundled_roster',{'sha256':roster_hash,'rows':count,'so':so,'controllers':controllers,'controller_groups':controller_groups})
+                repaired=apply_reconciliation(s,DATA/'morning_talk_al_reconciliation_2026-11-11.csv')
+                if repaired:logging.info('Historical AL reconciliation: %s verified matched employees',repaired)
+                plan_path=DATA/'Plan_SO.xlsx';plan_hash=hashlib.sha256(plan_path.read_bytes()).hexdigest()
+                if db.state(s,'bundled_plan',{}).get('sha256')!=plan_hash:
+                    rows=import_plan(s,plan_path,0,plan_path.name);db.put(s,'bundled_plan',{'sha256':plan_hash,'rows':rows})
+                location_path=DATA/'Location_All.xlsx';location_hash=hashlib.sha256(location_path.read_bytes()).hexdigest()
+                if db.state(s,'bundled_location',{}).get('sha256')!=location_hash:
+                    rows,_=import_locations(s,location_path,location_path.name);db.put(s,'bundled_location',{'sha256':location_hash,'rows':rows})
+                dealer_csv=DATA/'DEALERS_STATION_All_Location.csv'
+                dealer_path=dealer_csv if dealer_csv.exists() else DATA/'Dealer Location With sales coverage.xlsx'
+                dealer_hash=hashlib.sha256(dealer_path.read_bytes()).hexdigest()
+                if db.state(s,'bundled_dealer_locations',{}).get('sha256')!=dealer_hash:
+                    source_rows,dealers=import_dealer_locations(s,dealer_path)
+                    db.put(s,'bundled_dealer_locations',{'sha256':dealer_hash,'source_rows':source_rows,'dealers':dealers})
+                logging.info('Startup configuration committed; warehouse refresh is deferred')
+        except Exception:
+            logging.exception('Non-fatal startup master sync warning; continuing to start Telegram polling')
+        import gc; gc.collect()
         logging.info('SO bot ready: concurrent update workers=128, isolation=per-chat, test_mode=%s',TEST_MODE)
         create_bot().run_polling(allowed_updates=['message','edited_message','chat_member'],
                                  drop_pending_updates=False,bootstrap_retries=-1)

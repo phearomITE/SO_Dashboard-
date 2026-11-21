@@ -1314,8 +1314,15 @@ async def geocode_event(application,eid):
     await auto_refresh_warehouse(application,'pin_analysis')
 
 async def backfill_geo(app):
-    with db.session() as s:ids=[e.id for e in s.scalars(select(Event).where(Event.kind=='pin')) if not e.data.get('geo') or e.data.get('geo',{}).get('geo_issue')]
-    for eid in ids:await geocode_event(app,eid)
+    today_start=db.now().replace(hour=0,minute=0,second=0,microsecond=0)
+    with db.session() as s:
+        ids=[e.id for e in s.scalars(select(Event).where(Event.kind=='pin',Event.at>=today_start))
+             if not e.data.get('geo') or e.data.get('geo',{}).get('geo_issue')]
+    for eid in ids:
+        try:
+            await geocode_event(app,eid)
+        except Exception:
+            log.exception('Backfill geocode failed eid=%s',eid)
 
 async def backfill_geo_job(context):
     """Run startup backfill only after Telegram Application has started."""

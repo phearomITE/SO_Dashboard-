@@ -117,6 +117,7 @@ class SettingsBody(BaseModel):
     reason_acknowledgement: bool | None = None
     missing_report_followup: bool | None = None
     working_days: dict[str, bool] | None = None
+    khmer_holidays_pause: bool | None = None
 
 
 class AttendanceOverride(BaseModel):
@@ -951,19 +952,20 @@ def update_dealer_origin(dealer_key: str, body: LocationBody, request: Request,
 
 @router.get("/admin/settings")
 def get_settings(_admin: str = Depends(current_admin)):
-    from app.bot_control import get_bot_control, get_working_days
+    from app.bot_control import get_bot_control, get_khmer_holidays_pause, get_working_days
     from app.config import ALERT_INTERVAL_MINUTES
     from app.question_settings import get_question_settings
     with db.Session() as session:
         return {"automation": get_bot_control(session),
                 "alert_interval_minutes": int(state(session, "alert_interval_minutes", {}).get("minutes", ALERT_INTERVAL_MINUTES)),
                 "questions": get_question_settings(session),
-                "working_days": get_working_days(session)}
+                "working_days": get_working_days(session),
+                "khmer_holidays_pause": get_khmer_holidays_pause(session)}
 
 
 @router.patch("/admin/settings")
 def update_settings(body: SettingsBody, request: Request, admin: str = Depends(current_admin)):
-    from app.bot_control import get_bot_control, get_working_days, set_automation, set_working_days
+    from app.bot_control import get_bot_control, get_khmer_holidays_pause, get_working_days, set_automation, set_khmer_holidays_pause, set_working_days
     from app.config import ALERT_INTERVAL_MINUTES
     from app.question_settings import get_question_settings, update_question_settings
     changed = body.model_dump(exclude_none=True)
@@ -973,7 +975,8 @@ def update_settings(body: SettingsBody, request: Request, admin: str = Depends(c
         before = {"automation": state(session, "bot_automation_v1", {}),
                   "alert_interval_minutes": state(session, "alert_interval_minutes", {}).get("minutes", ALERT_INTERVAL_MINUTES),
                   "questions": get_question_settings(session),
-                  "working_days": get_working_days(session)}
+                  "working_days": get_working_days(session),
+                  "khmer_holidays_pause": get_khmer_holidays_pause(session)}
         if body.automation_enabled is not None:
             set_automation(session, body.automation_enabled, admin_uid, now)
         if body.alert_interval_minutes is not None:
@@ -981,13 +984,16 @@ def update_settings(body: SettingsBody, request: Request, admin: str = Depends(c
                 "changed_by": admin_uid, "changed_at": now.isoformat()})
         if body.working_days is not None:
             set_working_days(session, body.working_days, changed_by=admin_uid, changed_at=now)
+        if body.khmer_holidays_pause is not None:
+            set_khmer_holidays_pause(session, body.khmer_holidays_pause, changed_by=admin_uid, changed_at=now)
         questions = {k: v for k, v in changed.items() if k in {"wrong_plan", "over_10km", "reason_acknowledgement", "missing_report_followup"}}
         if questions:
             update_question_settings(session, questions, changed_by=admin_uid)
         after = {"automation": get_bot_control(session),
                  "alert_interval_minutes": state(session, "alert_interval_minutes", {}).get("minutes", ALERT_INTERVAL_MINUTES),
                  "questions": get_question_settings(session),
-                 "working_days": get_working_days(session)}
+                 "working_days": get_working_days(session),
+                 "khmer_holidays_pause": get_khmer_holidays_pause(session)}
         _audit(session.connection(), admin, "update", "settings", "global", before=before, after=after)
     invalidate_cache(request)
     return after
