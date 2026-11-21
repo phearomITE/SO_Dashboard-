@@ -5,7 +5,7 @@ from sqlalchemy import select
 from telegram import ForceReply
 from app import db
 from app.db import Group,Roster,Controller,Event,Missing,Leave,state,put
-from app.config import TEST_MODE,TEST_GROUP_TITLE,WORK_DAYS,SETTLE,ALERT_INTERVAL_MINUTES
+from app.config import TEST_MODE,TEST_GROUP_TITLE,SETTLE,ALERT_INTERVAL_MINUTES
 from app.rules import windows,is_reporter,normalize_position,person,link_visits
 from app.concurrency import chat_lock,scheduler_lock
 from app.alerts import send_central_alert
@@ -131,24 +131,27 @@ async def tick(context):
     # Serialize scheduler runs only. Each group uses its own lock so a check in
     # one group cannot freeze commands or ingestion in the other 64 groups.
     async with scheduler_lock(app):
-        if at.weekday() in WORK_DAYS:
-            with db.session() as s:
-                gs=[g.id for g in s.scalars(select(Group)) if enabled(g)]
-                interval=configured_alert_interval(s)
-            with db.session() as s:control=get_bot_control(s)
-            pause_until=control.get('paused_until')
-            try:pause_until=datetime.fromisoformat(pause_until) if pause_until else app.bot_data['started']
-            except (TypeError,ValueError):pause_until=app.bot_data['started']
-            started=max(app.bot_data['started'],app.bot_data.get('alert_interval_changed_at',app.bot_data['started']),pause_until)
-            for start,end in windows(at.date(),interval):
-                if end+timedelta(seconds=SETTLE)<=at and start>=started:
-                    for gid in gs:
-                        async with chat_lock(app,gid):
-                            key=f'checked:{gid}:{start.isoformat()}'
-                            with db.session() as s:done=state(s,key).get('done')
-                            if done:continue
-                            await check_window(app,gid,start,end)
-                            with db.session() as s:
-                                pending=s.scalar(select(Missing.id).where(Missing.chat==gid,Missing.start==start,Missing.alert_mid.is_(None)))
-                                if pending is None:put(s,key,{'done':True})
+        with db.session() as s:
+            gs=[g.id for g in s.scalars(select(Group)) if enabled(g)]
+            interval=configured_alert_interval(s)
+            control=get_bot_control(s)
+            interval_changed=state(s,'alert_interval_minutes',{}).get('changed_at')
+        started=app.bot_data['started']
+        for timestamp in (control.get('paused_until'), control.get('changed_at'), interval_changed):
+            if timestamp:
+                try:
+                    started=max(started,datetime.fromisoformat(timestamp))
+                except (TypeError,ValueError):
+                    pass
+        for start,end in windows(at.date(),interval):
+            if end+timedelta(seconds=SETTLE)<=at and start>=started:
+                for gid in gs:
+                    async with chat_lock(app,gid):
+                        key=f'checked:{gid}:{start.isoformat()}'
+                        with db.session() as s:done=state(s,key).get('done')
+                        if done:continue
+                        await check_window(app,gid,start,end)
+                        with db.session() as s:
+                            pending=s.scalar(select(Missing.id).where(Missing.chat==gid,Missing.start==start,Missing.alert_mid.is_(None)))
+                            if pending is None:put(s,key,{'done':True})
         await followups(app,at)

@@ -21,7 +21,6 @@ CENTRAL_ALERT_TOPIC_IDS = {
     'banner_report':int(os.getenv('CENTRAL_TOPIC_BANNER_REPORT_ID','0') or 0),
 }
 AUTO_RECONCILE_DEALER = os.getenv('AUTO_RECONCILE_DEALER','true').lower() == 'true'
-WORK_DAYS = {int(x) for x in os.getenv('WORK_DAYS','0,1,2,3,4').split(',')}
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN','')
 TEST_MODE = os.getenv('TEST_MODE','false').lower() == 'true'
 TEST_GROUP_TITLE = os.getenv('TEST_GROUP_TITLE','Test_SO')

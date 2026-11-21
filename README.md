@@ -250,7 +250,7 @@ Controller names are learned from their group activity or from the roster. Until
 
 ## Reporting rules
 
-- Monday–Friday (`WORK_DAYS=0,1,2,3,4`), Phnom Penh time.
+- Monday through Sunday, Phnom Penh time.
 - 15 morning windows: 08:00–11:45. No windows during 11:45–13:00.
 - 15 afternoon windows: 13:00–16:45. Last window: 16:30–16:45.
 - Windows are half-open: a report at exactly 08:15 belongs to 08:15–08:30. Checks run within about 2–7 seconds after the boundary, allowing the configured settle delay plus the five-second scheduler tick.

@@ -92,7 +92,6 @@ async def _copy_central_messages(application,key,source_chat_id,message_ids,cate
     message_ids=sorted({int(mid) for mid in message_ids if mid})
     if not message_ids:return None
     with db.session() as s:
-        if not automation_enabled(s):return None
         if state(s,unique,{}).get('sent'):return None
         chat_id=central_chat_id(s)
         if not chat_id:return None

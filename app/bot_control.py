@@ -2,7 +2,7 @@
 
 The Telegram process, commands, ingestion, geocoding, warehouse refreshes and
 API remain available while automation is paused. Only unsolicited alerts,
-questions, acknowledgements and other automatic outbound messages are muted.
+questions and acknowledgements are muted. Report forwarding stays active.
 """
 from datetime import datetime,timedelta
 from app.db import state,put,now
@@ -53,4 +53,4 @@ def bot_status_text(value):
                 if status=='RUNNING' else
                 'Automatic alerts, questions and acknowledgements are paused until /start_bot is used.')
     return (f'Bot automation: {status}\n{detail}\n'
-            'Docker, Telegram commands, data collection, geocoding, warehouse, API and Power BI refresh remain working.')
+            'Telegram commands, report forwarding, data collection and dashboard updates stay active.')

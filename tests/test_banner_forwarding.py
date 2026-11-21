@@ -33,10 +33,10 @@ def test_photo_without_banner_value_is_not_queued():
     application.create_task.call_args.args[0].close()
 
 
-def test_album_forward_is_native_complete_ordered_and_deduplicated(monkeypatch):
+def test_album_forward_continues_while_alerts_are_off(monkeypatch):
     from app import alerts
     db.connect('sqlite:///:memory:')
-    monkeypatch.setattr(alerts,'automation_enabled',lambda _session: True)
+    monkeypatch.setattr(alerts,'automation_enabled',lambda _session: False)
     monkeypatch.setattr(alerts,'central_chat_id',lambda _session: -200)
     monkeypatch.setattr(alerts,'central_topic_id',lambda _session,_category: 99)
     async def forward(**kwargs):

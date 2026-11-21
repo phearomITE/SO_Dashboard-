@@ -1028,21 +1028,21 @@ function SettingsPage() {
       </div>
       {error&&<p className="api-error" role="alert">{error}</p>}
       {settingsLoading ? <div className="empty" role="status">Loading persisted settings…</div> : !s ? <div className="empty">Settings could not be loaded. Correct the API/database error before changing bot automation.</div> : <>
-      <div className="settings-row"><div><b>Alert check interval</b></div><select disabled={saving} value={s.alert_interval_minutes} onChange={e=>change("alert_interval_minutes",Number(e.target.value))}>{[5,10,15,20,25,30,35,40,45,50,55,60].map(v=><option key={v} value={v}>{v} minutes</option>)}</select></div>
+      <div className="settings-row"><div><b>Alert check interval</b><small>Monday to Sunday, Cambodia time</small></div><select disabled={saving} value={s.alert_interval_minutes} onChange={e=>change("alert_interval_minutes",Number(e.target.value))}>{[5,10,15,20,25,30,35,40,45,50,55,60].map(v=><option key={v} value={v}>{v} minutes</option>)}</select></div>
       {[
         [
           "wrong_plan",
-          "Wrong Plan Check-in",
+          "Wrong Plan Check-in questions",
           "Ask when actual commune differs from the uploaded plan.",
         ],
         [
           "over_10km",
-          "Road Distance Over 10 km",
+          "Road Distance Over 10 km questions",
           "Alert dealer-to-first and check-in-to-check-in exceptions.",
         ],
         [
           "missing_report_followup",
-          "Missing Report",
+          "Missing Report follow-up",
           "Monitor completed reporting windows and notify controllers.",
         ],
         [
@@ -1065,7 +1065,7 @@ function SettingsPage() {
           </button>
         </div>
       ))}
-      <div className="settings-row"><div><b>Automatic bot alerts</b></div><button disabled={saving} className={"toggle "+(s.automation_enabled?"on":"")} onClick={()=>change("automation_enabled",!s.automation_enabled)}><span/></button></div>
+      <div className="settings-row"><div><b>Automatic bot alerts</b><small>Report forwarding and dashboard tracking stay active when alerts are off.</small></div><button disabled={saving} className={"toggle "+(s.automation_enabled?"on":"")} onClick={()=>change("automation_enabled",!s.automation_enabled)}><span/></button></div>
       <div className="settings-row"><div><b>Public ngrok dashboard link</b></div><div style={{display:"flex",gap:10,alignItems:"center"}}>{tunnel.active&&<a className="secondary compact" href={tunnel.public_url} target="_blank" rel="noreferrer">Open public dashboard</a>}<button className="secondary compact" onClick={refreshTunnel}>Refresh link</button></div></div>
       </>}
     </div>
