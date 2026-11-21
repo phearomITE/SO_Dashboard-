@@ -929,6 +929,18 @@ def auto_reconcile_reporter_group(s,user_id,group,text,message_id,at):
     put(s,f'roster_auto_reconcile:{group.id}:{message_id}:{r.uid}',audit)
     return {'roster':r,'audit':audit,'group':group}
 
+def _ensure_reporting_group(s,msg):
+    g=s.get(Group,msg.chat_id)
+    if not g and getattr(msg.chat,'type','') in ('group','supergroup') and msg.chat_id!=CENTRAL_ALERT_CHAT_ID:
+        title_upper=str(getattr(msg.chat,'title','') or '').upper()
+        if 'TEST_SO' not in title_upper:
+            matches=set(re.findall(r'(?<![A-Z0-9])(R[1-8])\s*[-_]\s*([A-Z0-9]+)(?![A-Z0-9])',title_upper))
+            codes=[f'{region}-{dealer}' for region,dealer in matches if DEALER_REGIONS.get(dealer)==region]
+            if len(codes)==1:
+                g=Group(id=msg.chat_id,title=getattr(msg.chat,'title','') or codes[0],code=codes[0],test_uids=[],active=1,topic=None)
+                s.add(g);s.flush()
+    return g
+
 async def activity(update,context):
     msg=update.effective_message;u=update.effective_user
     if not msg or not u or u.is_bot:return
@@ -936,7 +948,7 @@ async def activity(update,context):
     at=msg.date.astimezone(TZ).replace(tzinfo=None)
     reconciliation=None
     with db.session() as s:
-        candidate_group=s.get(Group,msg.chat_id)
+        candidate_group=_ensure_reporting_group(s,msg)
         if candidate_group and enabled(candidate_group) and (
                 candidate_group.topic is None or msg.message_thread_id==candidate_group.topic):
             reconciliation=auto_reconcile_reporter_group(
@@ -1092,6 +1104,14 @@ async def activity(update,context):
         for c in s.scalars(select(Controller).where(Controller.uid==u.id)):
             c.name=u.full_name;c.username=u.username or ''
         g=s.get(Group,msg.chat_id)
+        if not g and getattr(msg.chat,'type','') in ('group','supergroup') and msg.chat_id!=CENTRAL_ALERT_CHAT_ID:
+            title_upper=str(getattr(msg.chat,'title','') or '').upper()
+            if 'TEST_SO' not in title_upper:
+                matches=set(re.findall(r'(?<![A-Z0-9])(R[1-8])\s*[-_]\s*([A-Z0-9]+)(?![A-Z0-9])',title_upper))
+                codes=[f'{region}-{dealer}' for region,dealer in matches if DEALER_REGIONS.get(dealer)==region]
+                if len(codes)==1:
+                    g=Group(id=msg.chat_id,title=getattr(msg.chat,'title','') or codes[0],code=codes[0],test_uids=[],active=1,topic=None)
+                    s.add(g);s.flush()
         if not g or not enabled(g):
             # Log configuration failures without disclosing employee report text.
             if msg.location or is_form(text):
@@ -1102,13 +1122,22 @@ async def activity(update,context):
                                 'group is not registered; use /setup_group' if not g else 'group is disabled by configuration')
                     warnings[msg.chat_id]=time.monotonic()
             return
-        if g.topic is not None and msg.message_thread_id!=g.topic:return
+        text_coordinates=coordinates_from_text(text)
+        is_checkin_activity=bool(msg.location or text_coordinates or is_form(text) or msg.photo or (msg.document and (msg.document.mime_type or '').startswith('image/')))
+        if g.topic is not None and msg.message_thread_id!=g.topic and not is_checkin_activity:return
         candidates=list(s.scalars(select(Roster).where(Roster.uid==u.id,Roster.active==1)))
         candidates.sort(key=lambda row:(row.source!='excel',str(row.employee or '').startswith('manual:')))
         r=candidates[0] if candidates else None
+        if not r and is_checkin_activity and g.code and '-' in str(g.code):
+            t_reg,t_dlr=str(g.code).split('-',1)
+            sender_norm=normalized_person_name(u.full_name)
+            if sender_norm:
+                name_matches=[row for row in s.scalars(select(Roster).where(Roster.active==1,Roster.dealer==t_dlr)) if normalized_person_name(row.name)==sender_norm]
+                if len(name_matches)==1:
+                    r=name_matches[0]
         auto_join=None
-        if not r and is_form(text):
-            # A valid outlet report is sufficient evidence to register a new
+        if not r and (is_form(text) or msg.location or text_coordinates):
+            # A valid outlet report or check-in pin is sufficient evidence to register a new
             # field reporter in this known Region-Dealer group. Use the
             # established manual:<telegram_id> identity until the official
             # List_SO workbook supplies the employee ID.
@@ -1139,11 +1168,15 @@ async def activity(update,context):
             s.flush()
             auto_join={'group':g,'region':target_region,'dealer':target_dealer,
                        'employee':provisional_id,'name':u.full_name,'username':u.username or ''}
-        if not r or r.uid not in {x.uid for x in members(s,g)}:return
+        if not r:return
+        if is_checkin_activity:
+            if g.test_uids and u.id not in g.test_uids:return
+            if TEST_MODE and u.id not in (g.test_uids or []):return
+            if state(s,f'excluded:{g.id}:{r.uid}').get('yes'):return
+        elif r.uid not in {x.uid for x in members(s,g)}:return
         r.username=u.username or ''
         at=msg.date.astimezone(TZ).replace(tzinfo=None)
         reply=msg.reply_to_message.message_id if msg.reply_to_message else None
-        text_coordinates=coordinates_from_text(text)
         if is_self_full_day_leave(text) and not msg.photo and not msg.document and not text_coordinates:
             start=datetime.combine(at.date(),datetime.min.time());end=start+timedelta(days=1)
             save_leave(s,r,start,end,[g],source='Standalone AL message',

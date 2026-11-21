@@ -144,27 +144,89 @@ def _collect_day_visits(conn: Session, target_day: date) -> list[dict]:
         for r in conn.scalars(select(Roster).where(Roster.active == 1)).all():
             if r.uid:
                 roster_by_uid.setdefault(int(r.uid), r)
+        seen_pin_ids: set[int] = set()
         for item in link_visits(live_events):
             ev = item["event"]
             pin = item["pin"]
+            if pin:
+                seen_pin_ids.add(int(pin.id))
             if not pin or int(ev.id) in seen_event_ids:
                 continue
+            seen_event_ids.add(int(ev.id))
             chat_id = int(ev.chat or 0)
             grp = group_by_id.get(chat_id)
             if chat_id in excluded_chats or (grp and _is_test_group(grp.title, grp.code)):
                 continue
             r_obj = roster_by_uid.get(int(ev.uid or 0))
-            pos = str((r_obj.position if r_obj else None) or "SO").strip().upper()
-            if pos not in ("SO", "SS"):
+            pjson = (ev.data or {}).get("person") or {}
+            pos = str((r_obj.position if r_obj else pjson.get("position")) or "SO").strip().upper()
+            if pos in ("HEAD OF SALES", "AREA SALES MANAGER"):
                 continue
             fields = _parse_form_fields(item.get("text") or "")
-            dlr = normalized_dealer((r_obj.dealer if r_obj else "") or fields.get("dealer", ""))
-            reg = str((r_obj.region if r_obj else "") or "").strip().upper()
+            grp_dlr = grp.code.split("-", 1)[1].strip() if (grp and grp.code and "-" in grp.code) else ""
+            dlr = normalized_dealer((r_obj.dealer if r_obj else "") or fields.get("dealer", "") or pjson.get("dealer", "") or grp_dlr)
+            reg = str((r_obj.region if r_obj else "") or pjson.get("region", "") or "").strip().upper()
             if not reg and dlr in DEALER_TO_REGION:
                 reg = DEALER_TO_REGION[dlr]
             if not reg and grp and grp.code and "-" in grp.code:
                 reg = grp.code.split("-", 1)[0].strip().upper()
             pin_data = pin.data if isinstance(pin.data, dict) else {}
+            geo = pin_data.get("geo") if isinstance(pin_data.get("geo"), dict) else {}
+            visits.append({
+                "region": reg,
+                "dealer": dlr,
+                "district": str(geo.get("district") or "").strip(),
+                "commune": str(geo.get("commune_code") or geo.get("commune") or "").strip(),
+                "outlet_type": _norm_outlet_type(fields.get("outlet type")),
+                "emergency_outlet": _metric_qty(fields.get("emergency outlet")),
+                "attacking_stock": _metric_qty(fields.get("attacking stock outlet") or fields.get("attacking stock")),
+                "tour_program_outlet": _metric_qty(fields.get("tour program outlet") or fields.get("tour program")),
+                "key_wholesale": _metric_qty(fields.get("key wholesale")),
+                "water": _metric_qty(fields.get("water")),
+                "c_cola": _metric_qty(fields.get("c-cola") or fields.get("c cola")),
+                "ize_pet_300ml": _metric_qty(fields.get("ize pet 300ml")),
+                "ize_pet_1500ml": _metric_qty(fields.get("ize pet 1500ml")),
+            })
+        # Also include any remaining 24h location check-in pins (standalone or >5 min from form)
+        form_candidates = [e for e in live_events if e.kind in ("form", "photo") and int(e.id) not in seen_event_ids]
+        for pin in live_events:
+            if pin.kind != "pin" or int(pin.id) in seen_pin_ids:
+                continue
+            chat_id = int(pin.chat or 0)
+            grp = group_by_id.get(chat_id)
+            if chat_id in excluded_chats or (grp and _is_test_group(grp.title, grp.code)):
+                continue
+            pin_data = pin.data if isinstance(pin.data, dict) else {}
+            try:
+                lat = float(pin_data.get("lat"))
+                lon = float(pin_data.get("lon"))
+            except (TypeError, ValueError):
+                continue
+            if not (9.80 <= lat <= 14.75 and 102.30 <= lon <= 107.70):
+                continue
+            r_obj = roster_by_uid.get(int(pin.uid or 0))
+            pjson = pin_data.get("person") if isinstance(pin_data.get("person"), dict) else {}
+            pos = str((r_obj.position if r_obj else pjson.get("position")) or "SO").strip().upper()
+            if pos in ("HEAD OF SALES", "AREA SALES MANAGER"):
+                continue
+            # Match nearest unpaired form/photo within ±30 minutes if available
+            near_forms = [
+                f for f in form_candidates
+                if f.chat == pin.chat and f.uid == pin.uid and int(f.id) not in seen_event_ids
+                and abs((f.at - pin.at).total_seconds()) <= 1800
+            ]
+            fields: dict[str, str] = {}
+            if near_forms:
+                best_f = min(near_forms, key=lambda f: abs((f.at - pin.at).total_seconds()))
+                seen_event_ids.add(int(best_f.id))
+                fields = _parse_form_fields((best_f.data or {}).get("text") or "")
+            grp_dlr = grp.code.split("-", 1)[1].strip() if (grp and grp.code and "-" in grp.code) else ""
+            dlr = normalized_dealer((r_obj.dealer if r_obj else "") or fields.get("dealer", "") or pjson.get("dealer", "") or grp_dlr)
+            reg = str((r_obj.region if r_obj else "") or pjson.get("region", "") or "").strip().upper()
+            if not reg and dlr in DEALER_TO_REGION:
+                reg = DEALER_TO_REGION[dlr]
+            if not reg and grp and grp.code and "-" in grp.code:
+                reg = grp.code.split("-", 1)[0].strip().upper()
             geo = pin_data.get("geo") if isinstance(pin_data.get("geo"), dict) else {}
             visits.append({
                 "region": reg,
@@ -419,71 +481,88 @@ def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: P
                 dlr_metrics[(dlr, mkey, ot)] += float(v[mkey])
 
     date_label = f"Date:{target_day:%d.%m.%Y}" if win_end == target_day else f"Date:{target_day:%d.%m.%Y} - {win_end:%d.%m.%Y}"
+    bundled_tpl = Path(__file__).resolve().parent / "templates" / "Simple-Report GP.xlsx"
 
+    wb = None
     if template_path and Path(template_path).exists():
-        wb = load_workbook(template_path)
-        if _is_ready_gp_template(wb):
-            # Preserve 100% of the uploaded/bundled template's exact design, styles, merges, widths & heights.
-            for title in list(wb.sheetnames):
-                if title not in ("Report GP", "Report with Dealer"):
-                    del wb[title]
-            report = wb["Report GP"]
-            dealer_ws = wb["Report with Dealer"]
-            _safe_write(report, "B3", date_label)
-            _safe_write(dealer_ws, "B3", date_label)
+        try:
+            candidate_wb = load_workbook(template_path)
+            if _is_ready_gp_template(candidate_wb):
+                wb = candidate_wb
+            else:
+                candidate_wb.close()
+        except Exception:
+            wb = None
+    if wb is None and bundled_tpl.exists():
+        try:
+            candidate_wb = load_workbook(bundled_tpl)
+            if _is_ready_gp_template(candidate_wb):
+                wb = candidate_wb
+            else:
+                candidate_wb.close()
+        except Exception:
+            wb = None
 
-            # Populate Report GP (R1..R8 in rows 10..17, Grand Total in row 18)
-            for idx in range(8):
-                row_num = 10 + idx
-                reg = str(report.cell(row_num, 2).value or f"R{idx + 1}").strip().upper()
-                _safe_write(report, row_num, 4, reg_so[reg])
-                _safe_write(report, row_num, 5, reg_ss[reg])
-                _safe_write(report, row_num, 6, reg_al[reg])
-                _safe_write(report, row_num, 7, f"=D{row_num}+E{row_num}-F{row_num}")
-                _safe_write(report, row_num, 8, len(reg_districts[reg]))
-                _safe_write(report, row_num, 9, len(reg_communes[reg]))
-                _safe_write(report, row_num, 10, reg_visits[reg])
-                _safe_write(report, row_num, 11, f"=IFERROR(J{row_num}/G{row_num},0)")
-                for mkey, _, start_col in REPORT_METRICS:
-                    for i, ot in enumerate(OUTLET_TYPES):
-                        val = reg_metrics[(reg, mkey, ot)]
-                        _safe_write(report, row_num, start_col + i, int(val) if val == int(val) else round(val, 2))
-            _safe_write(report, 18, 8, len(all_districts))
-            _safe_write(report, 18, 9, len(all_communes))
-            _safe_write(report, 18, 11, "=IFERROR(J18/G18,0)")
-
-            # Populate Report with Dealer (65 dealers in rows 10..74, Grand Total in row 75)
-            for row_num in range(10, 75):
-                dlr = normalized_dealer(dealer_ws.cell(row_num, 3).value)
-                _safe_write(dealer_ws, row_num, 4, dlr_so[dlr])
-                _safe_write(dealer_ws, row_num, 5, dlr_ss[dlr])
-                _safe_write(dealer_ws, row_num, 6, dlr_al[dlr])
-                _safe_write(dealer_ws, row_num, 7, f"=D{row_num}+E{row_num}-F{row_num}")
-                _safe_write(dealer_ws, row_num, 8, len(dlr_districts[dlr]))
-                _safe_write(dealer_ws, row_num, 9, len(dlr_communes[dlr]))
-                _safe_write(dealer_ws, row_num, 10, dlr_visits[dlr])
-                _safe_write(dealer_ws, row_num, 11, f"=IFERROR(J{row_num}/G{row_num},0)")
-                for mkey, _, start_col in REPORT_METRICS:
-                    for i, ot in enumerate(OUTLET_TYPES):
-                        val = dlr_metrics[(dlr, mkey, ot)]
-                        _safe_write(dealer_ws, row_num, start_col + i, int(val) if val == int(val) else round(val, 2))
-            _safe_write(dealer_ws, 75, 8, len(all_districts))
-            _safe_write(dealer_ws, 75, 9, len(all_communes))
-            _safe_write(dealer_ws, 75, 11, "=IFERROR(J75/G75,0)")
-
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            wb.save(output_path)
-            wb.close()
-            return
-
-        if "Report GP" not in wb.sheetnames:
-            wb.active.title = "Report GP"
+    if wb is not None and _is_ready_gp_template(wb):
+        # Preserve 100% of the uploaded/bundled template's exact design, styles, merges, widths & heights.
         for title in list(wb.sheetnames):
-            if title != "Report GP":
+            if title not in ("Report GP", "Report with Dealer"):
                 del wb[title]
-    else:
-        wb = Workbook()
-        wb.active.title = "Report GP"
+        report = wb["Report GP"]
+        dealer_ws = wb["Report with Dealer"]
+        _safe_write(report, "B3", date_label)
+        _safe_write(dealer_ws, "B3", date_label)
+
+        # Populate Report GP (R1..R8 in rows 10..17, Grand Total in row 18)
+        for idx in range(8):
+            row_num = 10 + idx
+            reg = str(report.cell(row_num, 2).value or f"R{idx + 1}").strip().upper()
+            _safe_write(report, row_num, 4, reg_so[reg])
+            _safe_write(report, row_num, 5, reg_ss[reg])
+            _safe_write(report, row_num, 6, reg_al[reg])
+            _safe_write(report, row_num, 7, f"=D{row_num}+E{row_num}-F{row_num}")
+            _safe_write(report, row_num, 8, len(reg_districts[reg]))
+            _safe_write(report, row_num, 9, len(reg_communes[reg]))
+            _safe_write(report, row_num, 10, reg_visits[reg])
+            _safe_write(report, row_num, 11, f"=IFERROR(J{row_num}/G{row_num},0)")
+            report.cell(row_num, 11).number_format = "0.00"
+            for mkey, _, start_col in REPORT_METRICS:
+                for i, ot in enumerate(OUTLET_TYPES):
+                    val = reg_metrics[(reg, mkey, ot)]
+                    _safe_write(report, row_num, start_col + i, int(val) if val == int(val) else round(val, 2))
+        _safe_write(report, 18, 8, len(all_districts))
+        _safe_write(report, 18, 9, len(all_communes))
+        _safe_write(report, 18, 11, "=IFERROR(J18/G18,0)")
+        report.cell(18, 11).number_format = "0.00"
+
+        # Populate Report with Dealer (65 dealers in rows 10..74, Grand Total in row 75)
+        for row_num in range(10, 75):
+            dlr = normalized_dealer(dealer_ws.cell(row_num, 3).value)
+            _safe_write(dealer_ws, row_num, 4, dlr_so[dlr])
+            _safe_write(dealer_ws, row_num, 5, dlr_ss[dlr])
+            _safe_write(dealer_ws, row_num, 6, dlr_al[dlr])
+            _safe_write(dealer_ws, row_num, 7, f"=D{row_num}+E{row_num}-F{row_num}")
+            _safe_write(dealer_ws, row_num, 8, len(dlr_districts[dlr]))
+            _safe_write(dealer_ws, row_num, 9, len(dlr_communes[dlr]))
+            _safe_write(dealer_ws, row_num, 10, dlr_visits[dlr])
+            _safe_write(dealer_ws, row_num, 11, f"=IFERROR(J{row_num}/G{row_num},0)")
+            dealer_ws.cell(row_num, 11).number_format = "0.00"
+            for mkey, _, start_col in REPORT_METRICS:
+                for i, ot in enumerate(OUTLET_TYPES):
+                    val = dlr_metrics[(dlr, mkey, ot)]
+                    _safe_write(dealer_ws, row_num, start_col + i, int(val) if val == int(val) else round(val, 2))
+        _safe_write(dealer_ws, 75, 8, len(all_districts))
+        _safe_write(dealer_ws, 75, 9, len(all_communes))
+        _safe_write(dealer_ws, 75, 11, "=IFERROR(J75/G75,0)")
+        dealer_ws.cell(75, 11).number_format = "0.00"
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+        wb.close()
+        return
+
+    wb = Workbook()
+    wb.active.title = "Report GP"
 
     report = wb["Report GP"]
     _setup_headers(report, "REGION", False, target_day)

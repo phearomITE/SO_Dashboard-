@@ -767,7 +767,15 @@ def acquire_lock():
     if engine.dialect.name != 'postgresql': return
     lock_connection=engine.connect().execution_options(isolation_level="AUTOCOMMIT")
     if not lock_connection.execute(text('SELECT pg_try_advisory_lock(835501519)')).scalar():
-        lock_connection.close(); raise RuntimeError('Another SO bot is already running against this database. Stop it first.')
+        try:
+            lock_connection.execute(text(
+                "SELECT pg_terminate_backend(pid) FROM pg_locks "
+                "WHERE locktype='advisory' AND objid=835501519 AND pid <> pg_backend_pid()"
+            ))
+        except Exception:
+            pass
+        if not lock_connection.execute(text('SELECT pg_try_advisory_lock(835501519)')).scalar():
+            lock_connection.close(); raise RuntimeError('Another SO bot is already running against this database. Stop it first.')
 
 def release_lock():
     global lock_connection

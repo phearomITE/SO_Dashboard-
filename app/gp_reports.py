@@ -26,9 +26,18 @@ TEMPLATES={'roster':'SO_List.xlsx','template':'Simple-Report GP.xlsx','staff':'R
 BUNDLED_TEMPLATE=ROOT/'app'/'templates'/'Simple-Report GP.xlsx'
 
 def _resolve_template_path()->Path:
+    from openpyxl import load_workbook
+    from app.gp_live_export import _is_ready_gp_template
     uploaded=BASE/'templates'/TEMPLATES['template']
     if uploaded.exists():
-        return uploaded
+        try:
+            wb=load_workbook(uploaded,read_only=False,data_only=False)
+            ok=_is_ready_gp_template(wb)
+            wb.close()
+            if ok:
+                return uploaded
+        except Exception:
+            pass
     if BUNDLED_TEMPLATE.exists():
         return BUNDLED_TEMPLATE
     return uploaded

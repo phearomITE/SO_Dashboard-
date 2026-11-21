@@ -115,6 +115,37 @@ def actual_plan_report(engine,start,end,region=None,dealer=None,search=''):
         outlet_targets=workbook_outlet_targets(batch,bytes(workbook['content'])) if workbook else []
         plans=[dict(row) for row in conn.execute(text("SELECT p.employee,p.day,p.data FROM so_plans_v1 p JOIN so_states_v1 s ON s.key='plan_dates' AND p.batch=s.data->>p.day WHERE p.day BETWEEN :start_text AND :end_text"),params).mappings()]
         visits=[dict(row) for row in conn.execute(text("""SELECT employee_id,telegram_id,max(real_name) AS real_name,max(position) AS position,region,dealer,report_date,actual_commune_code,actual_commune,actual_district,count(DISTINCT visit_id) AS checkins
-            FROM silver_so_visit_v1 WHERE report_date BETWEEN :start AND :end AND upper(trim(coalesce(position,'SO'))) IN ('SO','SS')
+            FROM silver_so_visit_v1 WHERE report_date BETWEEN :start AND :end AND upper(trim(coalesce(position,'SO'))) NOT IN ('HEAD OF SALES','AREA SALES MANAGER')
             GROUP BY employee_id,telegram_id,region,dealer,report_date,actual_commune_code,actual_commune,actual_district"""),params).mappings()]
+        try:
+            raw_pins=[dict(row) for row in conn.execute(text("""SELECT
+                    coalesce(r.employee,e.data->'person'->>'employee','') AS employee_id,
+                    e.uid AS telegram_id,
+                    max(coalesce(r.name,e.data->'person'->>'name','')) AS real_name,
+                    max(coalesce(r.position,e.data->'person'->>'position','SO')) AS position,
+                    coalesce(r.region,e.data->'person'->>'region',split_part(g.code,'-',1),'') AS region,
+                    coalesce(r.dealer,e.data->'person'->>'dealer',substring(g.code from position('-' in g.code)+1),'') AS dealer,
+                    e.at::date AS report_date,
+                    coalesce(e.data->'geo'->>'commune_code','') AS actual_commune_code,
+                    coalesce(e.data->'geo'->>'commune','') AS actual_commune,
+                    coalesce(e.data->'geo'->>'district','') AS actual_district,
+                    count(DISTINCT e.id) AS checkins
+                FROM so_events_v1 e
+                LEFT JOIN LATERAL (
+                    SELECT x.employee,x.name,x.region,x.dealer,x.position FROM so_roster_v1 x
+                    WHERE x.uid=e.uid AND x.active=1 ORDER BY x.source='excel' DESC,x.id LIMIT 1
+                ) r ON true
+                LEFT JOIN so_groups_v1 g ON g.id=e.chat
+                WHERE e.kind='pin' AND e.at::date BETWEEN :start AND :end
+                  AND (e.data->>'lat') ~ '^-?[0-9]+([.][0-9]+)?$'
+                  AND (e.data->>'lon') ~ '^-?[0-9]+([.][0-9]+)?$'
+                  AND (e.data->>'lat')::double precision BETWEEN 9.80 AND 14.75
+                  AND (e.data->>'lon')::double precision BETWEEN 102.30 AND 107.70
+                  AND e.chat<>-1004303041907 AND lower(trim(coalesce(g.title,'')))<>'test_so'
+                  AND upper(trim(coalesce(r.position,e.data->'person'->>'position','SO'))) NOT IN ('HEAD OF SALES','AREA SALES MANAGER')
+                GROUP BY 1,2,5,6,7,8,9,10"""),params).mappings()]
+            if sum(int(r['checkins']) for r in raw_pins) > sum(int(v['checkins']) for v in visits):
+                visits = raw_pins
+        except Exception:
+            pass
     return {'start':start.isoformat(),'end':end.isoformat(),'outlet_workbook':workbook['filename'] if workbook else None,**summarize_actual_plan(roster,plans,visits,days,region,dealer,search,outlet_targets=outlet_targets)}

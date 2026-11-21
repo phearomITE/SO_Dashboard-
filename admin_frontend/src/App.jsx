@@ -1283,7 +1283,7 @@ function SettingsPage() {
       <div className="panel-head" style={{ paddingLeft: 0, paddingRight: 0 }}>
         <div>
           <h2>Alert Rules & Automation</h2>
-          <p>{s?.weekend_muted ? "Non-working day active: Alert Rules & Automation are paused, while Report Forwarding (Group_SO_Controll topics) and Dashboard Tracking remain active." : "Active working day (08:00–11:45 / 13:00–16:45 ICT): Alert Rules & Automation are running. Non-working days still track & forward reports."}</p>
+          <p>{s?.weekend_muted ? "Non-working day active: Alert Rules & Automation are paused, while Report Forwarding (Group_SO_Controll topics) and 24h/24h Dashboard Check-In Tracking (00:00 AM – 00:00 AM) remain active." : "Active working day: Alert Rules & Automation are running. Dashboard Check-In tracking & Report Forwarding run 24h/24h (00:00 AM – 00:00 AM, Mon–Sun) across all pages."}</p>
         </div>
       </div>
       {error&&<p className="api-error" role="alert">{error}</p>}
@@ -1291,7 +1291,7 @@ function SettingsPage() {
       <div className="settings-row">
         <div>
           <b>Working Time</b>
-          <small>Choose which days Alert Rules &amp; Automation run (08:00–11:45 &amp; 13:00–16:45 ICT). Off days (e.g. Sat &amp; Sun) disable alerts/detection while keeping report forwarding &amp; dashboard tracking active.</small>
+          <small>Choose which days Alert Rules &amp; Automation run. Dashboard Check-In tracking and Report Forwarding run 24h/24h (00:00 AM – 00:00 AM, Mon–Sun) regardless of Working Time.</small>
         </div>
         <div className="sa-working-days">
           {DAY_LABELS.map(([key, label]) => {

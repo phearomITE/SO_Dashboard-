@@ -388,7 +388,7 @@ def historical_checkins(selected):
             AND fe.at BETWEEN p.pin_at-interval '30 minutes' AND p.pin_at+interval '30 minutes'
           ORDER BY abs(extract(epoch from (fe.at-p.pin_at))),fe.mid LIMIT 1) form_ev ON true
         LEFT JOIN so_groups_v1 g ON g.id=p.chat_id
-        WHERE upper(trim(coalesce(r.position,p.person->>'position','SO'))) IN ('SO','SS')
+        WHERE upper(trim(coalesce(r.position,p.person->>'position','SO'))) NOT IN ('HEAD OF SALES','AREA SALES MANAGER')
         ORDER BY p.pin_at,p.telegram_id,p.message_id
     """,{"start":datetime.combine(selected,datetime.min.time()),"end":datetime.combine(selected+timedelta(days=1),datetime.min.time())})
 
@@ -434,7 +434,7 @@ def warehouse_checkins(selected):
         WHERE v.report_date=:selected AND v.latitude BETWEEN 9.80 AND 14.75
           AND v.longitude BETWEEN 102.30 AND 107.70
           AND v.chat_id<>-1004303041907 AND lower(trim(coalesce(v.group_name,'')))<>'test_so'
-          AND upper(trim(coalesce(v.position,'SO'))) IN ('SO','SS')
+          AND upper(trim(coalesce(v.position,'SO'))) NOT IN ('HEAD OF SALES','AREA SALES MANAGER')
         ORDER BY v.submitted_at,v.telegram_id,v.message_id,v.visit_id
     """,{"selected":selected})
 
@@ -523,26 +523,22 @@ def snapshot(day: date | None = Query(default=None),
     cached = _redis_json_response(redis_client, cache_key)
     if cached is not None:
         return cached
+    def _day_checkins_24h(d: date) -> tuple[list[dict], str]:
+        raw_rows = historical_checkins(d)
+        wh_rows = warehouse_checkins(d)
+        if len(raw_rows) >= len(wh_rows) and raw_rows:
+            return raw_rows, "raw_live_events"
+        if wh_rows:
+            return wh_rows, "silver_warehouse"
+        return raw_rows, "raw_live_events"
+
     if not is_range:
-        if selected == current:
-            checkins=historical_checkins(selected)
-            data_source="raw_live_events"
-            if not checkins:
-                checkins=warehouse_checkins(selected)
-                data_source="silver_warehouse"
-        else:
-            checkins=warehouse_checkins(selected)
-            data_source="silver_warehouse"
-            if not checkins:
-                checkins=historical_checkins(selected)
-                data_source="raw_event_fallback"
+        checkins, data_source = _day_checkins_24h(selected)
     else:
         checkins = []
         d_cur = win_start
         while d_cur <= win_end:
-            day_rows = historical_checkins(d_cur) if d_cur == current else warehouse_checkins(d_cur)
-            if not day_rows:
-                day_rows = warehouse_checkins(d_cur) if d_cur == current else historical_checkins(d_cur)
+            day_rows, _ = _day_checkins_24h(d_cur)
             checkins.extend(day_rows)
             d_cur += timedelta(days=1)
         data_source = "range_combined"
@@ -567,6 +563,12 @@ def snapshot(day: date | None = Query(default=None),
              WHERE l.employee=r.employee AND l.uid=r.uid
                AND l.start<(:win_end + interval '1 day') AND l."end">:win_start)) AS al_count
     """, {"win_start": win_start, "win_end": win_end})[0]
+    live_active_sale = len({str(c.get("employee_id") or c.get("telegram_id") or "") for c in checkins if (c.get("employee_id") or c.get("telegram_id"))})
+    live_checkin_count = len(checkins)
+    live_over_10km = sum(1 for c in checkins if float(c.get("road_distance_km") or 0) > 10)
+    ops["active_sale"] = max(int(ops.get("active_sale") or 0), live_active_sale)
+    ops["checkin_count"] = max(int(ops.get("checkin_count") or 0), live_checkin_count)
+    ops["over_10km_count"] = max(int(ops.get("over_10km_count") or 0), live_over_10km)
     leaves = _query_rows("""SELECT r.employee AS employee_id,r.uid AS telegram_id,r.name AS real_name,
                r.region,r.dealer,r.position,l.source,l.start AS leave_start,l."end" AS leave_end
         FROM so_roster_v1 r JOIN so_leave_v1 l ON l.employee=r.employee AND l.uid=r.uid

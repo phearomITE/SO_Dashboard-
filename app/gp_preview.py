@@ -155,7 +155,7 @@ def workbook_preview(path):
                         'color':_colour(cell.font.color,'#20344f'),'fontWeight':700 if cell.font.bold else 400,
                         'fontStyle':'italic' if cell.font.italic else 'normal',
                         'textAlign':cell.alignment.horizontal if cell.alignment.horizontal in ('left','right','center') else ('right' if isinstance(value,(int,float)) else 'left'),
-                        'fontSize':min(15,max(11,cell.font.sz or 11))}})
+                        'fontSize':min(20,max(10,cell.font.sz or 11))}})
                 rows.append({'height':min(60,max(25,sheet.row_dimensions[r].height or 25)),'cells':cells})
             widths = [min(190,max(50,(sheet.column_dimensions[get_column_letter(c)].width or 10)*7)) for c in range(1,sheet.max_column+1)]
             hidden=sorted({c for dimension in sheet.column_dimensions.values() if dimension.hidden for c in range(dimension.min or 1,(dimension.max or dimension.min or 1)+1) if c<=sheet.max_column})
