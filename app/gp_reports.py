@@ -149,8 +149,6 @@ async def _run(job):
     started=time.perf_counter()
     settings=_settings();settings.ensure_directories()
     template_path=BASE/'templates'/TEMPLATES['template']
-    if not template_path.exists():
-        raise FileNotFoundError('Report GP template (Simple-Report GP.xlsx) is missing. Upload a template first.')
     _step(job,'Reading live SO check-ins and reports from database',progress=25)
     output=JOBS/job['id']/'outputs';output.mkdir(parents=True,exist_ok=True)
     paths=export_live_gp_reports(job['start'],job['end'],template_path,output)
@@ -230,8 +228,6 @@ def live_preview(day:date|None=None,_admin=Depends(current_admin)):
     from app.gp_live_export import export_live_gp_reports
     target_day=day or datetime.now(ZoneInfo('Asia/Phnom_Penh')).date()
     template_path=BASE/'templates'/TEMPLATES['template']
-    if not template_path.exists():
-        raise HTTPException(404,'Report GP template (Simple-Report GP.xlsx) is missing.')
     with tempfile.TemporaryDirectory(prefix='gp-preview-') as tmpdir:
         paths=export_live_gp_reports(target_day.isoformat(),target_day.isoformat(),template_path,Path(tmpdir))
         return workbook_preview(paths[0])

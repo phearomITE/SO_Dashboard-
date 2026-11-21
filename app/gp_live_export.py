@@ -7,7 +7,7 @@ from copy import copy
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.cell.cell import MergedCell
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from sqlalchemy import select, text
@@ -183,32 +183,41 @@ def _safe_write(sheet, coord_or_row, col_or_val, val=None):
 
 
 def _setup_headers(sheet, row1_label: str, is_dealer: bool, day: date) -> None:
+    # Unmerge any stale merges so header & data cells are safely writable
+    for rng in list(sheet.merged_cells.ranges):
+        sheet.unmerge_cells(str(rng))
+
     _safe_write(sheet, "B2", "Region:R1 to R8")
     _safe_write(sheet, "B3", f"Date:{day:%d.%m.%Y}")
     _safe_write(sheet, "B4", "#Dealer:65")
-    _safe_write(sheet, "B5", "Daily Sales Report")
+    _safe_write(sheet, "B5", "Daily Sales Report by Dealer" if is_dealer else "Daily Sales Report")
+    _safe_write(sheet, "AR5", "REMARK")
     _safe_write(sheet, "B6", row1_label)
+    if is_dealer:
+        _safe_write(sheet, "C6", "DEALER")
     _safe_write(sheet, "D6", "Sales Team")
     _safe_write(sheet, "H6", "Location")
-    _safe_write(sheet, "H7", "Visited Location")
-    _safe_write(sheet, "L6", "Execution")
-    _safe_write(sheet, "L7", "Outlet Activity & Purchase By SKU")
-    _safe_write(sheet, "AR5", "Remark")
+    _safe_write(sheet, "H7", "Actual Visit Location")
+    _safe_write(sheet, "J7", "# Outlets Visit\nBased on Report")
+    _safe_write(sheet, "K7", "Average #\nof Outlets Visit")
+    _safe_write(sheet, "L7", "Execution Purchase outlet By SKU")
 
-    # Unmerge any stale merges in columns 8..44 on rows 8..75 so metric/data cells are writable
-    for rng in list(sheet.merged_cells.ranges):
-        if rng.min_row >= 8 or rng.max_col >= 12:
-            sheet.unmerge_cells(str(rng))
+    sheet["B5"].fill = PatternFill("solid", fgColor="D9E2F3")
+    sheet["B5"].font = Font(name="Calibri", size=16, bold=True, italic=True, color="FF0000")
+    sheet["AR5"].fill = PatternFill("solid", fgColor="FCE4D6")
+    sheet["AR5"].font = Font(name="Calibri", size=10, bold=True, color="000000")
+    for col in range(2, 44):
+        sheet.cell(5, col).fill = PatternFill("solid", fgColor="D9E2F3")
 
-    for col, title in [(4, "SO"), (5, "SS"), (6, "AL"), (7, "Active"), (8, "District"), (9, "Commune"), (10, "Check-in"), (11, "Avg")]:
+    for col, title in [(4, "SO"), (5, "SS"), (6, "AL"), (7, "Active"), (8, "District"), (9, "Commune")]:
         c = sheet.cell(8, col)
         c.value = title
-        c.font = Font(name="Calibri", size=11, bold=True, color="000000")
+        c.font = Font(name="Calibri", size=11, bold=True, color="FF0000" if col == 6 else ("00B050" if col == 7 else "000000"))
         c.alignment = Alignment(horizontal="center", vertical="center")
         c.border = THIN_BORDER
     if is_dealer:
-        sheet.cell(8, 2).value = "Region"
-        sheet.cell(8, 3).value = "Dealer"
+        sheet.cell(8, 2).value = "REGION"
+        sheet.cell(8, 3).value = "DEALER"
 
     for idx, (_key, label, start_col) in enumerate(REPORT_METRICS):
         color = "00B0F0" if idx < 4 else "FF0000"
@@ -304,12 +313,16 @@ def _write_gp_workbook_for_day(conn: Session, target_day: date, template_path: P
             for mkey, _, _ in REPORT_METRICS:
                 dlr_metrics[(dlr, mkey, ot)] += float(v[mkey])
 
-    wb = load_workbook(template_path)
-    if "Report GP" not in wb.sheetnames:
-        raise ValueError("Template workbook must contain a 'Report GP' sheet.")
-    for title in list(wb.sheetnames):
-        if title != "Report GP":
-            del wb[title]
+    if template_path and Path(template_path).exists():
+        wb = load_workbook(template_path)
+        if "Report GP" not in wb.sheetnames:
+            wb.active.title = "Report GP"
+        for title in list(wb.sheetnames):
+            if title != "Report GP":
+                del wb[title]
+    else:
+        wb = Workbook()
+        wb.active.title = "Report GP"
 
     report = wb["Report GP"]
     _setup_headers(report, "REGION", False, target_day)

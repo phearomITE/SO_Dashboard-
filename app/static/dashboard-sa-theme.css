@@ -629,6 +629,11 @@ html.embedded .sa-filters-live {
   min-height: 0;
 }
 
+.sa-employees-wrap[hidden],
+#employeeDetailWrap[hidden] {
+  display: none !important;
+}
+
 .sa-emp-list-head {
   display: flex;
   align-items: flex-start;

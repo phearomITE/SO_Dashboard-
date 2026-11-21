@@ -439,8 +439,9 @@ function render(){const previouslyOpen=lastOpenOutletPin;const data=filtered();s
    const stopsHtml=journeyRows.map(({visit:x,index:i,distance,estimated})=>{
      const from=i===0?`Dealer ${x.dealer||'—'}`:`Outlet ${i}`;
      const locParts=[x.district,x.commune,x.province].filter(Boolean).join(', ')||'Location unavailable';
+     const outletLine=x.outlet_name?`<div class="sa-tl-outlet">${esc(x.outlet_name)}</div>`:'';
      const kmTxt=distance!=null?`${estimated?'≈ ':''}${Number(distance).toFixed(2)} km ${i===0?'from dealer':'from previous stop'}`:(i===0?'— from dealer':'— from previous stop');
-     return `<div class="sa-tl-item"><div class="sa-tl-dot">${i+1}</div><div class="sa-tl-content"><div class="sa-tl-title">${esc(from)} → Outlet ${i+1}</div><div class="sa-tl-meta">${esc(x.pin_time||'—')} · ${esc(locParts)}</div><div class="sa-tl-dist">${esc(kmTxt)}</div><button type="button" class="sa-tl-map-link" data-pin-id="${esc(x.pin_id)}">Show on map ↗</button></div></div>`;
+     return `<div class="sa-tl-item"><div class="sa-tl-dot">${i+1}</div><div class="sa-tl-content"><div class="sa-tl-title">${esc(from)} → Outlet ${i+1}</div><div class="sa-tl-meta">${esc(x.pin_time||'—')} · ${esc(locParts)}</div>${outletLine}<div class="sa-tl-dist">${esc(kmTxt)}</div><button type="button" class="sa-tl-map-link" data-pin-id="${esc(x.pin_id)}">Show on map ↗</button></div></div>`;
    }).join('');
    $('journeys').innerHTML=`<div class="sa-tl-list">${dealerCard}${stopsHtml||'<div class="empty">No check-ins for this employee on the selected date.</div>'}</div>`;
  }else{

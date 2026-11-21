@@ -68,3 +68,17 @@ def test_export_live_gp_reports_populates_checkins_without_scraping(tmp_path):
             wb.close()
     finally:
         db.engine.dispose()
+
+
+def test_export_live_gp_reports_works_without_template_file(tmp_path):
+    db.connect("sqlite:///:memory:")
+    try:
+        day = date(2026, 11, 21)
+        missing_template = tmp_path / "does_not_exist.xlsx"
+        paths = export_live_gp_reports(day.isoformat(), day.isoformat(), missing_template, tmp_path)
+        assert len(paths) == 1
+        meta = _validate(paths[0])
+        assert meta["sheets"] == 2
+        assert meta["dealers"] == 65
+    finally:
+        db.engine.dispose()
