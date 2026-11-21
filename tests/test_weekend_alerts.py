@@ -73,3 +73,24 @@ def test_weekday_runs_alert_scheduler(monkeypatch):
         )
     finally:
         db.engine.dispose()
+
+
+def test_working_days_can_be_configured_for_saturday_and_sunday(monkeypatch):
+    db.connect("sqlite:///:memory:")
+    try:
+        sat = datetime(2026, 11, 21, 9, 0)
+        monkeypatch.setattr(bot_control, "now", lambda: sat)
+        with db.session() as session:
+            # Default: Mon-Fri active, Sat & Sun off
+            defaults = bot_control.get_working_days(session)
+            assert defaults == {
+                "mon": True, "tue": True, "wed": True, "thu": True,
+                "fri": True, "sat": False, "sun": False,
+            }
+            assert bot_control.automation_enabled(session) is False
+
+            # Enable Saturday in Working Time settings
+            bot_control.set_working_days(session, {"sat": True}, changed_by=1, changed_at=sat)
+            assert bot_control.automation_enabled(session) is True
+    finally:
+        db.engine.dispose()

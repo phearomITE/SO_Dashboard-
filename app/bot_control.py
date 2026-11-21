@@ -8,11 +8,34 @@ from datetime import datetime,timedelta
 from app.db import state,put,now
 
 STATE_KEY='bot_automation_v1'
+WORKING_DAYS_KEY='working_days_v1'
+WEEKDAY_KEYS=('mon','tue','wed','thu','fri','sat','sun')
+DEFAULT_WORKING_DAYS={day:idx<5 for idx,day in enumerate(WEEKDAY_KEYS)}
 
 def is_weekend(at=None):
     """Return True on Saturday (5) or Sunday (6) in Cambodia time."""
     current=at or now()
     return current.weekday() in (5,6)
+
+def get_working_days(s):
+    saved=state(s,WORKING_DAYS_KEY,{})
+    return {day:bool(saved.get(day,DEFAULT_WORKING_DAYS[day])) for day in WEEKDAY_KEYS}
+
+def set_working_days(s,changes,changed_by=None,changed_at=None):
+    values=get_working_days(s)
+    for day in WEEKDAY_KEYS:
+        if day in changes and changes[day] is not None:
+            values[day]=bool(changes[day])
+    payload=dict(values)
+    if changed_by is not None:payload['changed_by']=int(changed_by)
+    if changed_at is not None:payload['changed_at']=changed_at.isoformat()
+    put(s,WORKING_DAYS_KEY,payload)
+    return values
+
+def is_working_day(s,at=None):
+    current=at or now()
+    day_key=WEEKDAY_KEYS[current.weekday()]
+    return get_working_days(s).get(day_key,current.weekday()<5)
 
 def get_bot_control(s):
     saved=state(s,STATE_KEY,{})
@@ -20,13 +43,17 @@ def get_bot_control(s):
     current=now()
     try:pause_active=bool(paused_until and datetime.fromisoformat(paused_until)>current)
     except (TypeError,ValueError):pause_active=False
-    weekend_muted=is_weekend(current)
+    working_days=get_working_days(s)
+    working_day_active=bool(working_days.get(WEEKDAY_KEYS[current.weekday()],current.weekday()<5))
+    weekend_muted=not working_day_active
     return {
-        'enabled':bool(saved.get('enabled',True)) and not pause_active and not weekend_muted,
+        'enabled':bool(saved.get('enabled',True)) and not pause_active and working_day_active,
         'configured_enabled':bool(saved.get('enabled',True)),
         'paused_until':paused_until,
         'pause_active':pause_active,
         'weekend_muted':weekend_muted,
+        'working_day_active':working_day_active,
+        'working_days':working_days,
         'changed_by':saved.get('changed_by'),
         'changed_at':saved.get('changed_at'),
     }

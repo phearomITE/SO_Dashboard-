@@ -1252,16 +1252,32 @@ function SettingsPage() {
   const [error,setError]=useState("");
   const [tunnel,setTunnel]=useState({active:false,public_url:"",message:"Checking ngrok…"});
   const refreshTunnel=()=>adminApi("/api/v1/admin/tunnel").then(setTunnel).catch(e=>setTunnel({active:false,public_url:"",message:e.message}));
+  const DEFAULT_DAYS = { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false };
+  const DAY_LABELS = [
+    ["mon", "Mon"], ["tue", "Tue"], ["wed", "Wed"], ["thu", "Thu"],
+    ["fri", "Fri"], ["sat", "Sat"], ["sun", "Sun"],
+  ];
   useEffect(()=>{
     let active=true;
     adminApi("/api/v1/admin/settings")
-      .then(x=>{if(active)setS({...x.questions,automation_enabled:x.automation.configured_enabled ?? x.automation.enabled,weekend_muted:Boolean(x.automation.weekend_muted),alert_interval_minutes:x.alert_interval_minutes})})
+      .then(x=>{if(active)setS({
+        ...x.questions,
+        automation_enabled:x.automation.configured_enabled ?? x.automation.enabled,
+        weekend_muted:Boolean(x.automation.weekend_muted),
+        working_days:x.working_days || x.automation.working_days || DEFAULT_DAYS,
+        alert_interval_minutes:x.alert_interval_minutes,
+      })})
       .catch(e=>{if(active)setError(e.message)})
       .finally(()=>{if(active)setSettingsLoading(false)});
     refreshTunnel();
     return ()=>{active=false};
   },[]);
-  async function change(key,value){if(!s||saving)return;setError("");const before=s[key];setS(x=>({...x,[key]:value}));setSaving(true);try{const result=await adminApi("/api/v1/admin/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({[key]:value})});setS(prev=>({...result.questions,automation_enabled:result.automation.configured_enabled ?? result.automation.enabled,weekend_muted:Boolean(result.automation.weekend_muted ?? prev?.weekend_muted),alert_interval_minutes:result.alert_interval_minutes}))}catch(e){setS(x=>({...x,[key]:before}));setError(e.message)}finally{setSaving(false)}}
+  async function change(key,value){if(!s||saving)return;setError("");const before=s[key];setS(x=>({...x,[key]:value}));setSaving(true);try{const result=await adminApi("/api/v1/admin/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({[key]:value})});setS(prev=>({...result.questions,automation_enabled:result.automation.configured_enabled ?? result.automation.enabled,weekend_muted:Boolean(result.automation.weekend_muted ?? prev?.weekend_muted),working_days:result.working_days || result.automation.working_days || prev?.working_days || DEFAULT_DAYS,alert_interval_minutes:result.alert_interval_minutes}))}catch(e){setS(x=>({...x,[key]:before}));setError(e.message)}finally{setSaving(false)}}
+  function toggleWorkingDay(dayKey){
+    if(!s||saving)return;
+    const next = { ...(s.working_days || DEFAULT_DAYS), [dayKey]: !(s.working_days?.[dayKey]) };
+    change("working_days", next);
+  }
   return (
     <>
     <TelegramConnections api={adminApi}/>
@@ -1269,12 +1285,35 @@ function SettingsPage() {
       <div className="panel-head" style={{ paddingLeft: 0, paddingRight: 0 }}>
         <div>
           <h2>Alert Rules & Automation</h2>
-          <p>{s?.weekend_muted ? "Saturday & Sunday mode: automatic alerts & questions are muted; report forwarding (Banner/Parasol) and dashboard tracking remain active." : "Monday–Friday: alert rules & automation run normally. Saturday–Sunday: alerts are muted while report forwarding & dashboard tracking stay active."}</p>
+          <p>{s?.weekend_muted ? "Non-working day active: Alert Rules & Automation are paused, while Report Forwarding (Group_SO_Controll topics) and Dashboard Tracking remain active." : "Active working day (08:00–11:45 / 13:00–16:45 ICT): Alert Rules & Automation are running. Non-working days still track & forward reports."}</p>
         </div>
       </div>
       {error&&<p className="api-error" role="alert">{error}</p>}
       {settingsLoading ? <div className="empty" role="status">Loading persisted settings…</div> : !s ? <div className="empty">Settings could not be loaded. Correct the API/database error before changing bot automation.</div> : <>
-      <div className="settings-row"><div><b>Alert check interval</b><small>Monday to Friday alerts (Cambodia time) · Sat &amp; Sun alerts muted automatically</small></div><select disabled={saving} value={s.alert_interval_minutes} onChange={e=>change("alert_interval_minutes",Number(e.target.value))}>{[5,10,15,20,25,30,35,40,45,50,55,60].map(v=><option key={v} value={v}>{v} minutes</option>)}</select></div>
+      <div className="settings-row">
+        <div>
+          <b>Working Time</b>
+          <small>Choose which days Alert Rules &amp; Automation run (08:00–11:45 &amp; 13:00–16:45 ICT). Off days (e.g. Sat &amp; Sun) disable alerts/detection while keeping report forwarding &amp; dashboard tracking active.</small>
+        </div>
+        <div className="sa-working-days">
+          {DAY_LABELS.map(([key, label]) => {
+            const on = Boolean((s.working_days || DEFAULT_DAYS)[key]);
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={saving}
+                aria-pressed={on}
+                className={`sa-day-pill ${on ? "on" : "off"}`}
+                onClick={() => toggleWorkingDay(key)}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="settings-row"><div><b>Alert check interval</b><small>Applies on active Working Time days (Cambodia time)</small></div><select disabled={saving} value={s.alert_interval_minutes} onChange={e=>change("alert_interval_minutes",Number(e.target.value))}>{[5,10,15,20,25,30,35,40,45,50,55,60].map(v=><option key={v} value={v}>{v} minutes</option>)}</select></div>
       {[
         [
           "wrong_plan",
